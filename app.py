@@ -4,19 +4,22 @@ import pandas as pd
 import numpy as np
 import folium
 from streamlit_folium import st_folium
+
+# Imports
 import backend_api
+# Importiere Charts und die Fallback Daten (nur für die Dropdown-Auswahl falls DB leer)
+from charts import create_radar_chart, create_diverging_bar_chart, create_bubble_map
+import charts_example_data
 
 # ---------------------------------------------------------
-# UI CONFIGURATION & CSS MAGIC
+# UI CONFIGURATION & CSS
 # ---------------------------------------------------------
 st.set_page_config(page_title="GeoPlant Analytics", layout="wide", page_icon="🌱")
 
-# Hier ist der CSS Trick für das Scrollytelling
 st.markdown("""
 <style>
-    /* Jeder Story-Schritt bekommt eine Mindesthöhe und zentrierten Inhalt */
     .story-step {
-        min-height: 85vh;
+        min-height: 90vh;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -24,76 +27,71 @@ st.markdown("""
         padding: 2rem;
         border-bottom: 1px solid #f0f2f6;
     }
-
     .story-title {
-        font-size: 2.5rem !important;
+        font-size: 2.8rem !important;
         font-weight: 700 !important;
-        color: #2c3e50;
+        color: #1e293b;
         text-align: center;
-        margin-bottom: 1rem;
     }
-
     .story-text {
-        font-size: 1.2rem !important;
-        color: #555;
+        font-size: 1.3rem !important;
+        color: #64748b;
         text-align: center;
         max-width: 800px;
-        margin: 0 auto 2rem auto;
+        margin: 0 auto 3rem auto;
     }
-
-    /* Das finale Dashboard etwas abheben */
     .dashboard-container {
-        background-color: #f8f9fa;
-        padding: 2rem;
-        border-radius: 15px;
+        background-color: #f8fafc;
+        padding: 3rem;
+        border-radius: 20px;
         margin-top: 5rem;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SESSION STATE SETUP
+# SESSION STATE
 # ---------------------------------------------------------
-if 'lat' not in st.session_state: st.session_state.lat = 47.3769
+if 'lat' not in st.session_state: st.session_state.lat = 47.3769 # Zurich
 if 'lon' not in st.session_state: st.session_state.lon = 8.5417
-# Wichtig: Wir speichern das Ergebnis, damit die Story beim Scrollen/Klicken bleibt
 if 'analysis_result' not in st.session_state: st.session_state.analysis_result = None
 if 'story_mode' not in st.session_state: st.session_state.story_mode = False
 
 # ---------------------------------------------------------
-# HEADER & INPUT SECTION (Intro)
+# HEADER & INPUT
 # ---------------------------------------------------------
-st.title("🌍 GeoPlant: Smart Crop Suitability")
+st.title("GeoPlant")
 
-# Container für die Auswahl (bleibt oben)
 with st.container():
     c1, c2 = st.columns([1, 2])
 
     with c1:
-        st.markdown("### 1️⃣ Wähle deine Pflanze")
+        st.markdown("### Choose the plant you wish to grow")
+        # Versuch DB Abfrage, sonst Fallback Liste
         try:
             plant_list = backend_api.get_plant_list()
+            if not plant_list: raise Exception("Empty DB")
         except:
-            plant_list = ["Example Plant"] # Fallback
+            plant_list = charts_example_data.plants
 
-        selected_plant = st.selectbox("Pflanze:", plant_list, label_visibility="collapsed")
+        selected_plant = st.selectbox("Ich möchte anbauen:", plant_list)
 
     with c2:
-        st.markdown("### 2️⃣ Wähle den Standort")
-        # Kleine Karte für die Auswahl
-        m = folium.Map(location=[st.session_state.lat, st.session_state.lon], zoom_start=4, height=300)
+        st.markdown("### Choose a location for your plant's potential future home")
+        m = folium.Map(location=[st.session_state.lat, st.session_state.lon], zoom_start=5, height=250)
         folium.Marker([st.session_state.lat, st.session_state.lon], icon=folium.Icon(color="green", icon="leaf")).add_to(m)
-        map_out = st_folium(m, height=200, use_container_width=True)
+        map_out = st_folium(m, height=250, use_container_width=True)
 
         if map_out['last_clicked']:
             st.session_state.lat = map_out['last_clicked']['lat']
             st.session_state.lon = map_out['last_clicked']['lng']
             st.rerun()
 
-    if st.button("🚀 Start Data Story", type="primary", use_container_width=True):
-        with st.spinner(f"Analysiere Boden & Klima für {selected_plant}..."):
-            # Daten holen und in Session speichern
+    st.markdown("---")
+    if st.button("Start Data Story", type="primary", use_container_width=True):
+        with st.spinner(f"Analysiere Daten für {selected_plant}..."):
+            # Backend Call
             st.session_state.analysis_result = backend_api.analyze_suitability(
                 selected_plant, st.session_state.lat, st.session_state.lon
             )
@@ -101,95 +99,72 @@ with st.container():
             st.rerun()
 
 # ---------------------------------------------------------
-# THE DATA STORY (Scrollytelling)
+# DATA STORY
 # ---------------------------------------------------------
 if st.session_state.story_mode and st.session_state.analysis_result:
     res = st.session_state.analysis_result
 
+    # Prüfen ob Fehler im Backend Resultat waren (z.B. Ocean)
+    # Wenn "error" drin ist, setzen wir real_data auf None -> Charts nutzen Fallback
     if "error" in res:
-        st.error(res['error'])
+        st.warning(f"Achtung: {res['error']} - Zeige Simulationsdaten.")
+        real_data_for_charts = None
     else:
-        # --- SCENE 1: THE VERDICT (Score) ---
-        st.markdown('<div class="story-step">', unsafe_allow_html=True)
-        st.markdown(f'<div class="story-title">Kapitel 1: Das Urteil</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="story-text">Basierend auf 30 Jahren Klimadaten für diesen Standort analysieren wir die Überlebenschance von <b>{selected_plant}</b>.</div>', unsafe_allow_html=True)
+        real_data_for_charts = res
 
-        # Grosser Gauge Chart im Fokus
-        col_center = st.columns([1,2,1])
-        with col_center[1]:
-            fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number", value=res['score'],
-                title={'text': f"Suitability: {res['status']}"},
-                gauge={'axis': {'range': [0, 100]}, 'bar': {'color': "#2ECC71" if res['score']>80 else "#E74C3C"}}
-            ))
-            fig_gauge.update_layout(height=400)
-            st.plotly_chart(fig_gauge, use_container_width=True)
+    # --- KAPITEL 1: RADAR CHART ---
+    st.markdown('<div class="story-step">', unsafe_allow_html=True)
+    st.markdown(f'<div class="story-title">Kapitel 1: Der Fingerabdruck</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="story-text">Vergleich der lokalen Bedingungen mit den Idealwerten von <b>{selected_plant}</b>.</div>', unsafe_allow_html=True)
 
-            if res['reasons']:
-                st.warning(f"⚠️ Hauptproblem: {res['reasons'][0]}")
-            else:
-                st.success("✅ Keine kritischen Probleme gefunden.")
-        st.markdown('</div>', unsafe_allow_html=True) # End Scene 1
+    # Hier übergeben wir nun die echten Daten (oder None)
+    fig_radar = create_radar_chart(selected_plant, "Selected Location", real_data=real_data_for_charts)
+
+    col_c1, col_c2, col_c3 = st.columns([1,3,1])
+    with col_c2: st.plotly_chart(fig_radar, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
-        # --- SCENE 2: THE CLIMATE DNA (Radar) ---
-        st.markdown('<div class="story-step">', unsafe_allow_html=True)
-        st.markdown(f'<div class="story-title">Kapitel 2: Die Klima-DNA</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="story-text">Wie passt das lokale Klima zu den Bedürfnissen der Pflanze? Sehen wir uns die Details an.</div>', unsafe_allow_html=True)
+    # --- KAPITEL 2: DIVERGING BAR ---
+    st.markdown('<div class="story-step">', unsafe_allow_html=True)
+    st.markdown(f'<div class="story-title">Kapitel 2: Die Lücken</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="story-text">Wo genau weicht das Klima vom Ideal ab?</div>', unsafe_allow_html=True)
 
-        # Wiederholung des Radar Codes (vereinfacht für Demo)
-        climate, plant = res['climate'], res['plant']
-        categories = ['Temp', 'Rain', 'pH', 'Sun', 'Elev']
-        # (Hier deinen Normierungs-Code einfügen) -> Mock Data für Demo Layout:
-        fig_radar = go.Figure()
-        fig_radar.add_trace(go.Scatterpolar(r=[0.8, 0.7, 0.9, 0.4, 0.8], theta=categories, fill='toself', name='Standort'))
-        fig_radar.add_trace(go.Scatterpolar(r=[0.6, 0.6, 0.6, 0.6, 0.6], theta=categories, fill='toself', name='Pflanze Min'))
-        fig_radar.update_layout(height=500, title="Vergleich: Standort (Blau) vs. Bedarf (Grün)")
+    fig_div = create_diverging_bar_chart(selected_plant, "Selected Location", real_data=real_data_for_charts)
 
-        col_c2 = st.columns([1,3,1])
-        with col_c2[1]:
-            st.plotly_chart(fig_radar, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True) # End Scene 2
+    col_c1, col_c2, col_c3 = st.columns([1,3,1])
+    with col_c2: st.plotly_chart(fig_div, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
-        # --- SCENE 3: SEASONALITY (Line) ---
-        st.markdown('<div class="story-step">', unsafe_allow_html=True)
-        st.markdown(f'<div class="story-title">Kapitel 3: Der Jahresverlauf</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="story-text">Pflanzen leben nicht im Durchschnitt. Überlebt sie den Winter? Vertrocknet sie im Sommer?</div>', unsafe_allow_html=True)
+    # --- KAPITEL 3: BUBBLE MAP ---
+    st.markdown('<div class="story-step">', unsafe_allow_html=True)
+    st.markdown(f'<div class="story-title">Kapitel 3: Globale Perspektive</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="story-text">Wo auf der Welt (aus unserer Datenbank) würde diese Pflanze sonst noch wachsen?</div>', unsafe_allow_html=True)
 
-        # (Hier deinen Line-Chart Code einfügen) -> Mock Data:
-        months = ['J','F','M','A','M','J','J','A','S','O','N','D']
-        temps = [climate['min_temp'], 5, 10, 15, 20, climate['max_temp'], 22, 20, 15, 10, 5, climate['min_temp']]
-        fig_line = go.Figure(go.Scatter(x=months, y=temps, mode='lines+markers', line_shape='spline'))
-        fig_line.add_hrect(y0=plant['Min_Temp'], y1=plant['Max_Temp'], fillcolor="green", opacity=0.1)
-        fig_line.update_layout(height=500, title="Temperaturverlauf vs. Wohlfühlzone")
+    # Bubble Map nutzt immer Mock Data für Global Context (siehe charts.py)
+    fig_map = create_bubble_map(selected_plant)
 
-        st.plotly_chart(fig_line, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True) # End Scene 3
+    st.plotly_chart(fig_map, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
-        # --- SCENE 4: FINAL DASHBOARD (Explorer) ---
-        st.markdown("---")
-        st.markdown('<div class="dashboard-container">', unsafe_allow_html=True)
-        st.subheader("🎛️ Expert Dashboard (Explorer)")
-        st.caption("Hier kannst du die Daten nun im Detail filtern und analysieren.")
+    # --- FINAL DASHBOARD ---
+    st.markdown('<div class="dashboard-container">', unsafe_allow_html=True)
+    st.subheader(f"Dashboard {selected_plant}")
 
-        # Interaktive Filter (Simuliert)
-        d_col1, d_col2, d_col3 = st.columns(3)
-        with d_col1:
-            st.checkbox("Zeige kritische Limits", value=True)
-        with d_col2:
-            st.slider("Simuliere Temperaturanstieg (°C)", 0, 5, 0)
-        with d_col3:
-             st.selectbox("Datenquelle", ["CHELSA V2.1", "WorldClim (Legacy)"])
+    # Metriken (Score kommt immer aus dem Backend Result, wenn vorhanden)
+    score = res.get('score', 0)
+    status = res.get('status', 'Simulation')
 
-        # Kleines Grid-Layout für die Übersicht
-        grid1, grid2 = st.columns(2)
-        with grid1:
-            st.plotly_chart(fig_gauge, use_container_width=True, key="dash_gauge") # key nutzen um Konflikt zu vermeiden
-            st.info(f"Niederschlag: {climate['rain']}mm / Jahr")
-        with grid2:
-            st.plotly_chart(fig_radar, use_container_width=True, key="dash_radar")
-            st.info(f"Temperatur: {climate['min_temp']}°C bis {climate['max_temp']}°C")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Suitability Score", f"{score}/100", delta=status)
+    m2.caption("Datenquelle: CHELSA V2.1 (Raster 1km)")
 
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.divider()
+
+    r1, r2 = st.columns(2)
+    with r1: st.plotly_chart(fig_radar, use_container_width=True, key="d_radar")
+    with r2: st.plotly_chart(fig_div, use_container_width=True, key="d_div")
+
+    st.markdown('</div>', unsafe_allow_html=True)
