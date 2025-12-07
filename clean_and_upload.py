@@ -1,11 +1,11 @@
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine # pyright: ignore[reportMissingImports]
 import re
 
 # ==========================================
 # 1. CONFIGURATION
 # ==========================================
-INPUT_CSV = 'plants.csv' 
+INPUT_CSV = 'plants.csv'
 # OLD (Laptop to Docker):
 # DB_CONNECTION = 'postgresql://postgres:admin@localhost:5432/geoplant'
 
@@ -23,13 +23,13 @@ def extract_min_temp(text):
         # Assume numbers are Fahrenheit if > 40, else Celsius
         # Take the lowest number found as the Minimum
         val = float(min(matches, key=float))
-        
+
         if val > 40: # Convert Fahrenheit to Celsius
             celsius = (val - 32) * 5/9
             return round(celsius, 1)
         else:
             return round(val, 1)
-            
+
     # Fallbacks based on keywords if no numbers found
     text_lower = str(text).lower()
     if 'tropical' in text_lower: return 18.0
@@ -48,27 +48,27 @@ def extract_rain(text):
 # ==========================================
 try:
     print(f"Reading {INPUT_CSV}...")
-    
+
     # FIX 1: encoding='cp1252' handles the Windows characters
     try:
         df = pd.read_csv(INPUT_CSV, encoding='cp1252')
     except:
         # Fallback if cp1252 fails
         df = pd.read_csv(INPUT_CSV, encoding='latin1')
-    
+
     # Create empty dataframe for the database
     clean_df = pd.DataFrame()
-    
+
     # FIX 2: Correct Column Mapping
-    clean_df['name'] = df['Plant Name']  
-    
+    clean_df['name'] = df['Plant Name']
+
     print("Extracting biological rules...")
     clean_df['min_temp_c'] = df['Growth'].apply(extract_min_temp)
     clean_df['max_temp_c'] = clean_df['min_temp_c'] + 15  # Estimate Max
-    
+
     clean_df['min_rain_mm'] = df['Watering'].apply(extract_rain)
     clean_df['max_rain_mm'] = clean_df['min_rain_mm'] + 1000
-    
+
     # Add dummy pH
     clean_df['min_ph'] = 6.0
     clean_df['max_ph'] = 7.5
@@ -82,7 +82,7 @@ try:
     print("\nUploading to Database...")
     engine = create_engine(DB_CONNECTION)
     clean_df.to_sql('plants', engine, if_exists='replace', index=False)
-    
+
     print("✅ SUCCESS! Table 'plants' created.")
 
 except Exception as e:

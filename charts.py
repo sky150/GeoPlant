@@ -10,61 +10,49 @@ from charts_example_data import (
 )
 
 # --------------------------------------------------------------------------
-# HELPER: Real Data to Chart Data Converter
+# DESIGN PALETTE (MATCHING STYLE.CSS)
+# --------------------------------------------------------------------------
+C_DARK_BLUE = "#1162AC"
+C_MED_BLUE = "#1F89D8"
+C_PINK = "#F15CE3"
+C_YELLOW = "#DAFF15"
+C_LIME = "#BDD409"
+C_BLACK = "#000000"
+
+# Font Settings
+FONT_MAIN = "Montserrat, Arial Black, sans-serif"
+
+# --------------------------------------------------------------------------
+# HELPER
 # --------------------------------------------------------------------------
 def _normalize(val, min_v, max_v):
-    """Hilfsfunktion um absolute Werte (z.B. 20°C) auf 0-100 Skala zu bringen"""
     if val is None: return 50
-    # Clipping, damit wir nicht aus dem Chart fallen
     return max(0, min(100, (val - min_v) / (max_v - min_v) * 100))
 
 def _convert_real_data_to_df(real_data):
-    """
-    Wandelt das Dictionary aus backend_api.py in ein DataFrame um,
-    das exakt so aussieht wie das aus charts_example_data.py.
-    """
     climate = real_data['climate']
     plant = real_data['plant']
 
-    # Globale Grenzen für die Normalisierung (Damit Charts vergleichbar sind)
-    # Temp: -10 bis 40°C, Rain: 0 bis 2000mm, pH: 4 bis 9
     bounds = {
-        "Temperature": (-10, 40),
-        "Precipitation": (0, 2000),
-        "pH": (4, 9),
-        "Sunlight": (0, 100),       # Prozent
-        "Soil Moisture": (0, 100)   # Prozent (als Proxy für Humidity/Seasonality)
+        "Temperature": (-10, 40), "Precipitation": (0, 2000),
+        "pH": (4, 9), "Sunlight": (0, 100), "Soil Moisture": (0, 100)
     }
 
-    # 1. Berechne "Plant Optimum" (Mittelwert aus Min/Max Bedarf)
-    # Wir mappen die echten DB-Werte auf die Chart-Kategorien
-
-    # Temp
     plant_temp_avg = (plant['Min_Temp'] + plant['Max_Temp']) / 2
     opt_temp = _normalize(plant_temp_avg, *bounds["Temperature"])
-
-    # Rain
     plant_rain_avg = (plant['Min_Rain'] + plant['Max_Rain']) / 2
     opt_rain = _normalize(plant_rain_avg, *bounds["Precipitation"])
-
-    # pH
     plant_ph_avg = (plant['Min_pH'] + plant['Max_pH']) / 2
     opt_ph = _normalize(plant_ph_avg, *bounds["pH"])
 
-    # Mocked/Simulated Plant needs for others
-    opt_sun = 80
-    opt_moist = 60
+    opt_sun = 80; opt_moist = 60
 
-    # 2. Berechne "Local Value" (Echte Messwerte)
     loc_temp = _normalize(climate['mean_temp'], *bounds["Temperature"])
     loc_rain = _normalize(climate['rain'], *bounds["Precipitation"])
     loc_ph = _normalize(climate.get('ph', 6.5), *bounds["pH"])
     loc_sun = _normalize(climate.get('sun', 50), *bounds["Sunlight"])
-
-    # Nutze 'seasonality' oder 'humidity' als Proxy für Moisture
     loc_moist = _normalize(climate.get('humidity', 50), *bounds["Soil Moisture"])
 
-    # 3. DataFrame bauen
     data = [
         ("Temperature", opt_temp, loc_temp),
         ("Precipitation", opt_rain, loc_rain),
@@ -78,123 +66,124 @@ def _convert_real_data_to_df(real_data):
     return df
 
 # --------------------------------------------------------------------------
-# CHART GENERATORS
+# CHART GENERATORS (Added 'height' parameter)
 # --------------------------------------------------------------------------
 
-def create_radar_chart(plant_name: str, location_name: str, real_data=None):
-    """
-    Erstellt Radar-Chart.
-    Logik: Versucht zuerst 'real_data' zu nutzen. Falls Fehler -> Fallback auf Mock Data.
-    """
+def create_radar_chart(plant_name: str, location_name: str, real_data=None, height=500):
     use_fallback = False
     df = None
 
-    # 1. Versuche echte Daten zu nutzen
     if real_data:
         try:
             df = _convert_real_data_to_df(real_data)
-            chart_title = f"Wachstumsbedingungen (Live Data): {plant_name}"
-            col_ideal = '#10b981'
-            col_act = '#3b82f6'
-        except Exception as e:
-            print(f"Chart Error (Real Data): {e}")
-            use_fallback = True
-    else:
-        use_fallback = True
+            chart_title = f"LIVE DATA: {plant_name.upper()}"
+        except: use_fallback = True
+    else: use_fallback = True
 
-    # 2. Fallback Logic
     if use_fallback:
-        # Prüfen ob Pflanze in Mock Data existiert, sonst Default
-        if plant_name not in mock_plants:
-            plant_name = "Tomato" # Ultimate Fallback
-            location_name = "Valencia"
-
+        if plant_name not in mock_plants: plant_name = "Tomato"
         df = get_plant_location_profile(plant_name, location_name)
-        chart_title = f"Wachstumsbedingungen (Beispiel): {plant_name}"
+        chart_title = f"SIMULATION: {plant_name.upper()}"
 
-    # 3. Plotting (Identisch für beide Datenquellen)
     fig = go.Figure()
 
-    # Pflanze (Ideal)
+    # TRACE 1: PLANT (IDEAL)
     fig.add_trace(go.Scatterpolar(
         r=df["plant_optimum"].tolist() + [df["plant_optimum"].iloc[0]],
         theta=df["condition"].tolist() + [df["condition"].iloc[0]],
-        fill='toself', name=f'{plant_name} (Ideal)',
-        line=dict(color='#10b981', width=2),
-        fillcolor='rgba(16, 185, 129, 0.3)'
+        fill='toself', name=f'{plant_name} (Target)',
+        line=dict(color=C_BLACK, width=3),
+        fillcolor='rgba(241, 92, 227, 0.4)',
+        marker=dict(symbol="circle", size=8, color=C_PINK, line=dict(color=C_BLACK, width=1))
     ))
 
-    # Standort (Aktuell)
+    # TRACE 2: LOCATION (ACTUAL)
     fig.add_trace(go.Scatterpolar(
         r=df["local_value"].tolist() + [df["local_value"].iloc[0]],
         theta=df["condition"].tolist() + [df["condition"].iloc[0]],
-        fill='toself', name=f'Standort (Aktuell)',
-        line=dict(color='#3b82f6', width=2),
-        fillcolor='rgba(59, 130, 246, 0.3)'
+        fill='toself', name=f'Location',
+        line=dict(color=C_BLACK, width=3, dash='dot'),
+        fillcolor='rgba(31, 137, 216, 0.4)',
+        marker=dict(symbol="square", size=8, color=C_MED_BLUE, line=dict(color=C_BLACK, width=1))
     ))
 
+    # Dynamic Margins
+    m_t = 80 if height > 400 else 30
+    m_b = 40 if height > 400 else 20
+
     fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+        font=dict(family=FONT_MAIN, size=14, color="black"),
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], color="black", showline=False, gridcolor="gray"),
+            angularaxis=dict(color="black", gridcolor="#ddd", linecolor="black", linewidth=2),
+            bgcolor="white"
+        ),
         showlegend=True,
-        title=dict(text=chart_title, x=0.5, xanchor='center'),
-        height=500
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.1, xanchor="center", x=0.5,
+            bordercolor=C_BLACK, borderwidth=2, bgcolor=C_YELLOW
+        ),
+        margin=dict(t=m_t, b=m_b),
+        height=height, # DYNAMIC HEIGHT
+        paper_bgcolor='rgba(255,255,255, 0.95)',
+        plot_bgcolor='rgba(255,255,255, 0.95)'
     )
     return fig
 
 
-def create_diverging_bar_chart(plant_name: str, location_name: str, real_data=None):
-    """
-    Erstellt Bar-Chart.
-    Logik: Versucht zuerst 'real_data' zu nutzen. Falls Fehler -> Fallback auf Mock Data.
-    """
+def create_diverging_bar_chart(plant_name: str, location_name: str, real_data=None, height=400):
     use_fallback = False
     df = None
 
     if real_data:
-        try:
-            df = _convert_real_data_to_df(real_data)
-        except:
-            use_fallback = True
-    else:
-        use_fallback = True
+        try: df = _convert_real_data_to_df(real_data)
+        except: use_fallback = True
+    else: use_fallback = True
 
     if use_fallback:
         if plant_name not in mock_plants: plant_name = "Tomato"
         df = get_plant_location_profile(plant_name, location_name)
 
-    # Farben basierend auf Abweichung
-    colors = ['#ef4444' if x < 0 else '#10b981' for x in df["difference"]]
+    colors = [C_PINK if x < 0 else C_LIME for x in df["difference"]]
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
         y=df["condition"], x=df["difference"],
         orientation='h',
-        marker=dict(color=colors, line=dict(color='rgba(0,0,0,0.3)', width=1)),
+        marker=dict(
+            color=colors,
+            line=dict(color=C_BLACK, width=2)
+        ),
         text=[f"{val:+.0f}" for val in df["difference"]],
-        textposition='outside'
+        textposition='outside',
+        textfont=dict(family=FONT_MAIN, size=14, color="black", weight="bold")
     ))
 
+    # Titel ausblenden bei kleinen Dashboard-Charts für mehr Platz
+    title_text = f"DEVIATION FROM TARGET" if height > 350 else ""
+    m_t = 50 if height > 350 else 20
+
     fig.update_layout(
-        title=dict(text=f"Abweichung vom Ideal: {plant_name}", x=0.5, xanchor='center'),
-        xaxis=dict(title="Abweichung (Negativ = Mangel / Positiv = Überschuss)"),
-        height=400,
-        showlegend=False
+        font=dict(family=FONT_MAIN, color="black"),
+        title=dict(text=title_text, x=0.5, xanchor='center'),
+        xaxis=dict(
+            title="Difference",
+            zeroline=True, zerolinecolor=C_BLACK, zerolinewidth=3,
+            showgrid=True, gridcolor="#eee"
+        ),
+        yaxis=dict(showgrid=False),
+        height=height, # DYNAMIC HEIGHT
+        margin=dict(t=m_t, b=20, l=10, r=10),
+        showlegend=False,
+        paper_bgcolor='rgba(255,255,255, 0.95)',
+        plot_bgcolor='rgba(255,255,255, 0.95)'
     )
     return fig
 
 
-def create_bubble_map(plant_name: str):
-    """
-    Erstellt Bubble Map.
-    ACHTUNG: Da das Backend aktuell nur EINEN Punkt berechnet und keine
-    weltweite Heatmap liefert, nutzen wir hier IMMER die Mock-Daten
-    für den 'Globalen Kontext'.
-    """
-    # Fallback auf Mock, wenn Pflanze unbekannt
-    if plant_name not in mock_plants:
-        plant_name_for_map = "Tomato"
-    else:
-        plant_name_for_map = plant_name
+def create_bubble_map(plant_name: str, height=500):
+    if plant_name not in mock_plants: plant_name_for_map = "Tomato"
+    else: plant_name_for_map = plant_name
 
     scores = compute_location_scores_for_plant(plant_name_for_map)
 
@@ -203,16 +192,26 @@ def create_bubble_map(plant_name: str):
         lon=scores["lon"], lat=scores["lat"],
         text=scores["location"], mode='markers',
         marker=dict(
-            size=scores["growth_score"] * 0.5,
+            size=scores["growth_score"] * 0.6,
             color=scores["growth_score"],
-            colorscale='Viridis',
-            showscale=True
+            colorscale=[[0, C_PINK], [0.5, C_YELLOW], [1, C_LIME]],
+            showscale=False,
+            line=dict(color=C_BLACK, width=1)
         )
     ))
 
+    m_t = 60 if height > 350 else 10
+
     fig.update_layout(
-        title=dict(text=f"Globale Alternativen (Simulation für {plant_name_for_map})", x=0.5, xanchor='center'),
-        geo=dict(projection_type='natural earth', showland=True, showcountries=True),
-        height=500, margin=dict(l=0, r=0, t=60, b=0)
+        title=dict(text=f"GLOBAL MATCHES (SIMULATION)", x=0.5, xanchor='center', font=dict(family=FONT_MAIN)),
+        geo=dict(
+            projection_type='natural earth',
+            showland=True, landcolor='#f0f2f6',
+            showcountries=True, countrycolor=C_BLACK,
+            showocean=True, oceancolor=C_MED_BLUE
+        ),
+        height=height, # DYNAMIC HEIGHT
+        margin=dict(l=0, r=0, t=m_t, b=0),
+        paper_bgcolor='rgba(255,255,255, 0.95)'
     )
     return fig
