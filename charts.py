@@ -11,11 +11,12 @@ C_PINK = "#F15CE3"
 C_YELLOW = "#DAFF15"
 C_LIME = "#BDD409"
 C_BLACK = "#000000"
+C_GREY = "#e6e6e6"
 FONT_MAIN = "Montserrat, Arial Black, sans-serif"
 
 
 # --------------------------------------------------------------------------
-# HELPER
+# HELPER FUNCTIONS
 # --------------------------------------------------------------------------
 def _normalize(val, min_v, max_v):
     if val is None:
@@ -24,10 +25,7 @@ def _normalize(val, min_v, max_v):
 
 
 def _calculate_sub_score(val, min_need, max_need, penalty_factor=5):
-    """
-    Calculates a simple 0-100 match score for a specific parameter.
-    penalty_factor: Points deducted per unit of deviation.
-    """
+    """Calculates match score (0-100) for a specific parameter."""
     if val is None:
         return 0
     if min_need <= val <= max_need:
@@ -42,6 +40,7 @@ def _calculate_sub_score(val, min_need, max_need, penalty_factor=5):
 
 
 def _convert_real_data_to_df(real_data):
+    """Prepares data for the Radar Chart"""
     climate = real_data["climate"]
     plant = real_data["plant"]
 
@@ -53,7 +52,7 @@ def _convert_real_data_to_df(real_data):
         "Soil Moisture": (0, 100),
     }
 
-    # Normalize for Radar Chart
+    # Normalize values relative to global bounds
     p_temp = _normalize(
         (plant["Min_Temp"] + plant["Max_Temp"]) / 2, *bounds["Temperature"]
     )
@@ -87,115 +86,90 @@ def _convert_real_data_to_df(real_data):
 
 
 def create_circular_gauge(score, real_data=None, height=350):
-    # 1. Determine Color
-    if score >= 80:
-        color = "#2ECC71"
-    elif score >= 50:
-        color = C_YELLOW
-    else:
-        color = "#E74C3C"
-
+    """
+    Modern Segmented Block Gauge showing REAL DATA METRICS at the top.
+    """
     fig = go.Figure()
 
-    # 2. Main Gauge
+    # --- 1. DETERMINE COLOR ---
+    if score >= 80:
+        active_color = "#2ECC71"  # Green
+    elif score >= 50:
+        active_color = C_YELLOW
+    else:
+        active_color = "#E74C3C"  # Red
+
+    # --- 2. BUILD SEGMENTS (Visuals) ---
+    total_segments = 40
+    lit_segments = int(score / (100 / total_segments))
+    colors = [active_color] * lit_segments + [C_GREY] * (total_segments - lit_segments)
+
     fig.add_trace(
-        go.Indicator(
-            mode="gauge+number",
-            value=score,
-            number={
-                "suffix": "%",
-                "font": {"size": 60, "family": FONT_MAIN, "color": C_DARK_BLUE},
-            },
-            title={
-                "text": "OVERALL SUITABILITY",
-                "font": {"size": 14, "family": "Poppins", "color": "gray"},
-                "align": "center",
-            },
-            gauge={
-                "axis": {"range": [0, 100], "tickwidth": 0, "visible": False},
-                "bar": {"color": color, "thickness": 0.85},
-                "bgcolor": "rgba(0,0,0,0)",
-                "borderwidth": 0,
-                "steps": [{"range": [0, 100], "color": "#f0f2f6"}],
-            },
-            domain={"x": [0, 1], "y": [0, 0.75]},
+        go.Pie(
+            values=[1] * total_segments,
+            hole=0.85,
+            sort=False,
+            direction="clockwise",
+            textinfo="none",
+            marker=dict(colors=colors, line=dict(color="white", width=3)),
+            domain={"x": [0, 1], "y": [0, 0.75]},  # Push gauge down slightly
+            hoverinfo="skip",
         )
     )
 
-    # 3. Add Top Metrics (Temp, Rain, pH)
+    # --- 3. CENTER TEXT (Score) ---
+    # Moved SUITABILITY label DOWN to avoid overlap with top metrics
+    fig.add_annotation(
+        x=0.5,
+        y=0.45,  # Center Number
+        text=f"{int(score)}",
+        showarrow=False,
+        font=dict(size=70, family=FONT_MAIN, color=C_DARK_BLUE),
+    )
+    fig.add_annotation(
+        x=0.5,
+        y=0.20,  # Suitability Text - Moved BELOW the number
+        text="SUITABILITY",
+        showarrow=False,
+        font=dict(size=14, family="Poppins", color="gray", weight="bold"),
+    )
+
+    # --- 4. TOP METRICS (REAL VALUES) ---
     if real_data:
         clim = real_data["climate"]
-        plant = real_data["plant"]
 
-        # --- FIXED TEMP LOGIC ---
-        # Don't use Mean Temp. Check Extremes instead.
+        val_temp = f"{clim['min_temp']}°"
+        val_rain = f"{clim['rain']}mm"
+        val_ph = f"{clim['ph']}"
 
-        # 1. Cold Check (Strict penalty for freezing)
-        if clim["min_temp"] < plant["Min_Temp"]:
-            diff = plant["Min_Temp"] - clim["min_temp"]
-            s_temp_min = max(0, 100 - (diff * 10))
-        else:
-            s_temp_min = 100
+        # Display 3 Metrics at the very top (y=0.9 - 1.0)
+        metrics = [
+            (val_temp, "MIN TEMP", 0.15),
+            (val_rain, "RAIN", 0.5),
+            (val_ph, "pH", 0.85),
+        ]
 
-        # 2. Heat Check
-        if clim["max_temp"] > plant["Max_Temp"]:
-            diff = clim["max_temp"] - plant["Max_Temp"]
-            s_temp_max = max(0, 100 - (diff * 5))
-        else:
-            s_temp_max = 100
-
-        # The Temp score is the worst of the two (Weakest Link)
-        s_temp = min(s_temp_min, s_temp_max)
-
-        # --- RAIN LOGIC ---
-        # Adjusted penalty factor to 0.05 (More forgiving)
-        # 200mm difference = -10% score
-        s_rain = _calculate_sub_score(
-            clim["rain"], plant["Min_Rain"], plant["Max_Rain"], penalty_factor=0.05
-        )
-
-        # --- pH LOGIC ---
-        # Strict: 30 pts per unit
-        s_ph = _calculate_sub_score(
-            clim["ph"], plant["Min_pH"], plant["Max_pH"], penalty_factor=30
-        )
-
-        # Temp Indicator
-        fig.add_trace(
-            go.Indicator(
-                mode="number",
-                value=s_temp,
-                number={"suffix": "%", "font": {"size": 24, "color": C_BLACK}},
-                title={"text": "TEMP", "font": {"size": 12, "color": "gray"}},
-                domain={"x": [0.1, 0.3], "y": [0.8, 1]},
+        for val, label, x_pos in metrics:
+            fig.add_annotation(
+                x=x_pos,
+                y=1.0,
+                text=str(val),
+                showarrow=False,
+                font=dict(size=24, family=FONT_MAIN, color=C_BLACK),
             )
-        )
-        # Rain Indicator
-        fig.add_trace(
-            go.Indicator(
-                mode="number",
-                value=s_rain,
-                number={"suffix": "%", "font": {"size": 24, "color": C_BLACK}},
-                title={"text": "RAIN", "font": {"size": 12, "color": "gray"}},
-                domain={"x": [0.4, 0.6], "y": [0.8, 1]},
+            fig.add_annotation(
+                x=x_pos,
+                y=0.88,
+                text=label,
+                showarrow=False,
+                font=dict(size=11, family="Poppins", color="gray"),
             )
-        )
-        # pH Indicator
-        fig.add_trace(
-            go.Indicator(
-                mode="number",
-                value=s_ph,
-                number={"suffix": "%", "font": {"size": 24, "color": C_BLACK}},
-                title={"text": "pH", "font": {"size": 12, "color": "gray"}},
-                domain={"x": [0.7, 0.9], "y": [0.8, 1]},
-            )
-        )
 
     fig.update_layout(
         height=height,
-        margin=dict(l=20, r=20, t=30, b=20),
+        margin=dict(l=10, r=10, t=40, b=10),  # Top margin for metrics
         paper_bgcolor="rgba(0,0,0,0)",
-        font={"family": "Poppins"},
+        showlegend=False,
     )
     return fig
 
@@ -207,7 +181,6 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
     df = _convert_real_data_to_df(real_data)
 
     fig = go.Figure()
-    # Ideal
     fig.add_trace(
         go.Scatterpolar(
             r=df["plant_optimum"].tolist() + [df["plant_optimum"].iloc[0]],
@@ -218,7 +191,6 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
             fillcolor="rgba(241, 92, 227, 0.3)",
         )
     )
-    # Actual
     fig.add_trace(
         go.Scatterpolar(
             r=df["local_value"].tolist() + [df["local_value"].iloc[0]],
