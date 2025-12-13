@@ -23,13 +23,38 @@ st.markdown(
 html, body, [class*="css"] { font-family: 'Poppins', sans-serif; }
 :root { --c-dark-blue: #1162AC; --c-pink: #F15CE3; --c-yellow: #DAFF15; --c-med-blue: #1F89D8; }
 
-h1 { font-family: 'Montserrat', sans-serif !important; font-weight: 900 !important; color: var(--c-dark-blue); text-shadow: 2px 2px 0px var(--c-yellow); text-transform: uppercase; }
+h1 { font-family: 'Montserrat', sans-serif !important; font-weight: 900 !important; color: var(--c-dark-blue); text-transform: uppercase; }
 
-/* Headers and Cards that contain only Text work fine */
-.pop-card-yellow { background: var(--c-yellow); color: black; border: 3px solid black; padding: 20px; border-radius: 15px; box-shadow: 5px 5px 0px black; }
+/* 1. AUTO-STYLE PLOTLY CHARTS AS CARDS */
+.stPlotlyChart {
+    background-color: white;
+    border: 3px solid black;
+    border-radius: 15px;
+    box-shadow: 5px 5px 0px 0px #000000;
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+/* 2. AUTO-STYLE FOLIUM MAP AS CARD */
+iframe {
+    border: 3px solid black !important;
+    border-radius: 15px !important;
+    box-shadow: 5px 5px 0px 0px #000000 !important;
+    background-color: white;
+    padding: 5px;
+}
 
 .stButton > button { background: var(--c-pink); color: white; border: 3px solid black; font-weight: 900; box-shadow: 4px 4px 0px 0px #000000; text-transform: uppercase; }
 .stButton > button:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0px 0px #000000; color:white; border-color:black; }
+
+/* Centered Section Titles */
+.chart-title {
+    text-align: center;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -50,7 +75,7 @@ if "regional_scan" not in st.session_state:
 # ---------------------------------------------------------
 st.markdown(
     """
-<div class="pop-card-yellow" style="text-align: center; margin-bottom: 2rem;">
+<div style="text-align: center; margin-bottom: 3rem;">
     <h1 style="margin:0; font-size: 4rem;">G E O P L A N T</h1>
     <div style="font-weight:700; letter-spacing:3px;">GLOBAL CROP ANALYTICS DASHBOARD</div>
 </div>
@@ -95,6 +120,7 @@ with st.container():
             st.session_state.lon = map_out["last_clicked"]["lng"]
             st.rerun()
 
+    st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚀 RUN GLOBAL ANALYSIS", type="primary", use_container_width=True):
         with st.spinner("Scanning 190+ Countries..."):
             # 1. Analyze Point
@@ -120,41 +146,49 @@ if st.session_state.analysis_result:
         st.error(res["error"])
     else:
         score = res["score"]
+        st.divider()
 
-        # --- ROW 1: CHARTS (Gauge | Radar | Diverging Bar) ---
-        # Adjusted columns to fit 3 charts side-by-side
+        # --- ROW 1: CHARTS (3 Cols) ---
         c1, c2, c3 = st.columns([1, 1, 1])
 
         with c1:
-            # Suitability Gauge
+            st.markdown(
+                '<div class="chart-title">SUITABILITY</div>', unsafe_allow_html=True
+            )
             st.plotly_chart(
-                create_circular_gauge(score, real_data=res, height=300),
+                create_circular_gauge(score, real_data=res, height=320),
                 use_container_width=True,
             )
 
         with c2:
-            # Radar Chart
+            st.markdown(
+                '<div class="chart-title">CONDITIONS</div>', unsafe_allow_html=True
+            )
             st.plotly_chart(
-                create_radar_chart(selected_plant, "Loc", res, height=300),
+                create_radar_chart(selected_plant, "Loc", res, height=320),
                 use_container_width=True,
             )
 
         with c3:
-            # Diverging Bar Chart
+            st.markdown(
+                '<div class="chart-title">DEVIATION</div>', unsafe_allow_html=True
+            )
             st.plotly_chart(
-                create_diverging_bar_chart(selected_plant, "Loc", res, height=300),
+                create_diverging_bar_chart(selected_plant, "Loc", res, height=320),
                 use_container_width=True,
             )
 
-        st.divider()
+        # Removed the divider line between top charts and map section
 
         # --- ROW 2: MAP & TOP LIST ---
-        # Map on Left (Wide), Top Regions on Right (Narrow)
-        if not st.session_state.regional_scan.empty:
-            m1, m2 = st.columns([2, 1])
+        m1, m2 = st.columns([3, 1])
 
+        if not st.session_state.regional_scan.empty:
             with m1:
-                st.markdown("### GLOBAL MAP")
+                st.markdown(
+                    '<div class="chart-title" style="text-align: left;">GLOBAL MAP</div>',
+                    unsafe_allow_html=True,
+                )
                 scan_df = st.session_state.regional_scan
 
                 m_global = folium.Map(
@@ -163,7 +197,7 @@ if st.session_state.analysis_result:
 
                 folium.Choropleth(
                     geo_data="https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/world-countries.json",
-                    name="Score",
+                    name="Suitability",
                     data=scan_df,
                     columns=["country", "score"],
                     key_on="feature.properties.name",
@@ -175,14 +209,16 @@ if st.session_state.analysis_result:
                     nan_fill_color="#f0f0f0",
                     highlight=True,
                 ).add_to(m_global)
+
                 st_folium(m_global, height=500, use_container_width=True)
 
             with m2:
-                st.markdown("### TOP REGIONS")
+                st.markdown(
+                    '<div class="chart-title">TOP REGIONS</div>', unsafe_allow_html=True
+                )
                 top = backend_api.get_top_countries(
                     selected_plant, st.session_state.regional_scan
                 )
-                # Height matched to map for better alignment
                 st.plotly_chart(
                     create_top_countries_chart(top, height=500),
                     use_container_width=True,
