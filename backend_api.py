@@ -2,8 +2,12 @@ import psycopg2
 import os
 import numpy as np
 import pandas as pd
+from countries import WORLD_LOCATIONS  # Import the big list
 
 
+# =========================================================
+# 1. DATABASE CONNECTION
+# =========================================================
 def get_db_connection():
     try:
         return psycopg2.connect(
@@ -17,22 +21,55 @@ def get_db_connection():
         return None
 
 
-def get_real_climate(lat, lon):
-    conn = get_db_connection()
-    if not conn:
-        return None
+# =========================================================
+# 2. LOGIC (Pure Python)
+# =========================================================
+def calculate_score_logic(plant, climate):
+    if not climate or not plant:
+        return 0, "Error", []
 
-    lat = float(lat)
-    lon = float(lon)
+    score = 100
+    reasons = []
+    status = "Ideal"
 
+    # Winter Kill
+    if climate["min_temp"] < plant["Min_Temp"]:
+        score = 0
+        status = "Dead"
+        reasons.append(f"❄️ Freeze: {climate['min_temp']:.1f}°C")
+    # Drought
+    elif climate["rain"] < plant["Min_Rain"]:
+        score -= 40
+        status = "Risk"
+        reasons.append(f"🌵 Dry: {climate['rain']}mm")
+    # Heat
+    elif climate["max_temp"] > plant["Max_Temp"]:
+        score -= 20
+        status = "Stress"
+        reasons.append(f"🔥 Hot: {climate['max_temp']:.1f}°C")
+    # Wet
+    elif climate["rain"] > plant["Max_Rain"]:
+        score -= 10
+        reasons.append(f"💧 Wet: {climate['rain']}mm")
+
+    return max(0, int(score)), status, reasons
+
+
+# =========================================================
+# 3. DATA FETCHING
+# =========================================================
+def fetch_climate_data(cursor, lat, lon):
+    lat, lon = float(lat), float(lon)
+
+    # Efficient 6-table join for one point
     query = """
     SELECT 
-        ST_Value(mean.rast, ST_SetSRID(ST_Point(%s, %s), 4326)) as raw_mean,
-        ST_Value(min.rast, ST_SetSRID(ST_Point(%s, %s), 4326)) as raw_min,
-        ST_Value(max.rast, ST_SetSRID(ST_Point(%s, %s), 4326)) as raw_max,
-        ST_Value(rain.rast, ST_SetSRID(ST_Point(%s, %s), 4326)) as raw_rain,
-        ST_Value(dry.rast, ST_SetSRID(ST_Point(%s, %s), 4326)) as raw_dry,
-        ST_Value(seas.rast, ST_SetSRID(ST_Point(%s, %s), 4326)) as raw_season
+        ST_Value(mean.rast, ST_SetSRID(ST_Point(%s, %s), 4326)),
+        ST_Value(min.rast, ST_SetSRID(ST_Point(%s, %s), 4326)),
+        ST_Value(max.rast, ST_SetSRID(ST_Point(%s, %s), 4326)),
+        ST_Value(rain.rast, ST_SetSRID(ST_Point(%s, %s), 4326)),
+        ST_Value(dry.rast, ST_SetSRID(ST_Point(%s, %s), 4326)),
+        ST_Value(seas.rast, ST_SetSRID(ST_Point(%s, %s), 4326))
     FROM 
         climate_temp_mean mean, climate_temp_min min, climate_temp_max max,
         climate_rain rain, climate_rain_driest dry, climate_rain_seasonality seas
@@ -45,45 +82,40 @@ def get_real_climate(lat, lon):
         ST_Intersects(seas.rast, ST_SetSRID(ST_Point(%s, %s), 4326));
     """
 
-    cur = conn.cursor()
-    args = (lon, lat) * 12
     try:
-        cur.execute(query, args)
-        result = cur.fetchone()
-        conn.close()
-
-        if not result or result[0] is None:
+        cursor.execute(query, (lon, lat) * 12)
+        row = cursor.fetchone()
+        if not row or row[0] is None:
             return None
 
-        def c_temp(val):
-            if val is None:
+        # Helper to safely convert scale
+        def val(idx, scale=10.0, offset=0):
+            v = row[idx]
+            if v is None:
                 return 0
-            if val > 1000:
-                return (val / 10.0) - 273.15
-            return val / 10.0
-
-        def c_rain(val):
-            if val is None:
-                return 0
-            return val / 10.0 if val > 5000 else val
+            if scale == 10.0 and v > 1000:
+                return (v / 10.0) - 273.15  # Kelvin fix
+            return (v / scale) + offset
 
         return {
-            "mean_temp": round(c_temp(result[0]), 1),
-            "min_temp": round(c_temp(result[1]), 1),
-            "max_temp": round(c_temp(result[2]), 1),
-            "rain": int(c_rain(result[3])),
-            "driest_month_rain": int(c_rain(result[4])),
-            "seasonality": int(result[5]) if result[5] else 0,
+            "mean_temp": round(val(0), 1),
+            "min_temp": round(val(1), 1),
+            "max_temp": round(val(2), 1),
+            "rain": int(val(3, scale=1.0 if row[3] < 5000 else 10.0)),
+            "driest_month_rain": int(val(4, scale=1.0 if row[4] < 5000 else 10.0)),
+            "seasonality": int(row[5] if row[5] else 0),
             "ph": 6.5,
             "humidity": 60,
             "sun": 80,
             "elevation": 500,
         }
-    except Exception as e:
-        print(f"SQL Execution Error: {e}")
+    except:
         return None
 
 
+# =========================================================
+# 4. PLANT DATA
+# =========================================================
 def get_plant_list():
     conn = get_db_connection()
     if not conn:
@@ -120,47 +152,26 @@ def get_plant_rules(plant_name):
     }
 
 
+# =========================================================
+# 5. PUBLIC API
+# =========================================================
 def analyze_suitability(plant_name, lat, lon):
-    climate = get_real_climate(lat, lon)
+    conn = get_db_connection()
+    if not conn:
+        return {"error": "DB Error"}
+
+    cur = conn.cursor()
+    climate = fetch_climate_data(cur, lat, lon)
+    conn.close()
+
     plant = get_plant_rules(plant_name)
 
     if not climate:
         return {"error": "Ocean/No Data"}
-    if not plant:
-        return {"error": "Plant Missing"}
 
-    score = 100
-    reasons = []
-    status = "Ideal"
-
-    if climate["min_temp"] < plant["Min_Temp"]:
-        deficit = plant["Min_Temp"] - climate["min_temp"]
-        score = max(0, score - (deficit * 10))
-        if score < 20:
-            status = "Dead"
-        else:
-            status = "Risk"
-
-    if climate["rain"] < plant["Min_Rain"]:
-        deficit = plant["Min_Rain"] - climate["rain"]
-        penalty = min(40, (deficit / plant["Min_Rain"]) * 40)
-        score -= penalty
-        status = "Risk" if score > 50 else "Poor"
-
-    if climate["max_temp"] > plant["Max_Temp"]:
-        excess = climate["max_temp"] - plant["Max_Temp"]
-        penalty = min(30, excess * 3)
-        score -= penalty
-        if status not in ["Dead", "Risk"]:
-            status = "Stress"
-
-    if climate["rain"] > plant["Max_Rain"]:
-        excess = climate["rain"] - plant["Max_Rain"]
-        penalty = min(20, (excess / plant["Max_Rain"]) * 20)
-        score -= penalty
-
+    score, status, reasons = calculate_score_logic(plant, climate)
     return {
-        "score": max(0, min(100, score)),
+        "score": score,
         "status": status,
         "reasons": reasons,
         "climate": climate,
@@ -169,271 +180,38 @@ def analyze_suitability(plant_name, lat, lon):
 
 
 def scan_continent_heatmap(plant_name, center_lat, center_lon, num_samples=200):
-    """
-    Scans continent strategically - focuses on country centers for speed
-    Returns country-level aggregated data
-    """
+    """GLOBAL SCAN: Checks ~190 countries (1 point each)"""
+    print("--- STARTING GLOBAL SCAN ---")
+    plant = get_plant_rules(plant_name)
+    if not plant:
+        return pd.DataFrame()
+
+    conn = get_db_connection()
+    if not conn:
+        return pd.DataFrame()
+    cur = conn.cursor()
+
     results = []
-    bounds = get_continent_bounds(center_lat, center_lon)
 
-    # Strategic sampling: focus on known country centers in the continent
-    country_centers = {
-        "Spain": (40.4, -3.7),
-        "France": (46.6, 2.3),
-        "Germany": (51.2, 10.4),
-        "Italy": (41.9, 12.6),
-        "United Kingdom": (54.0, -2.5),
-        "Greece": (39.1, 21.8),
-        "Turkey": (39.0, 35.0),
-        "Norway": (60.5, 8.5),
-        "Sweden": (62.0, 15.0),
-        "Finland": (64.0, 26.0),
-        "Poland": (52.0, 19.0),
-        "Portugal": (39.5, -8.0),
-        "Netherlands": (52.3, 5.5),
-        "Belgium": (50.8, 4.3),
-        "Switzerland": (46.8, 8.2),
-        "Austria": (47.5, 14.5),
-        "Czech Republic": (49.8, 15.5),
-        "Hungary": (47.2, 19.5),
-        "Romania": (46.0, 25.0),
-        "Bulgaria": (42.7, 25.5),
-        "Croatia": (45.8, 16.0),
-        "Serbia": (44.0, 21.0),
-        "Ukraine": (49.0, 32.0),
-        "Belarus": (53.9, 27.6),
-        "Denmark": (56.0, 10.0),
-        "Ireland": (53.0, -8.0),
-        "Iceland": (65.0, -18.0),
-        "Albania": (41.0, 20.0),
-        "North Macedonia": (41.6, 21.7),
-        "Bosnia": (44.0, 18.0),
-        "Slovakia": (48.7, 19.5),
-        "Slovenia": (46.1, 14.8),
-        "Estonia": (59.0, 26.0),
-        "Latvia": (57.0, 25.0),
-        "Lithuania": (55.0, 24.0),
-        "Moldova": (47.0, 29.0),
-        "Montenegro": (42.5, 19.3),
-        "Kosovo": (42.6, 20.9),
-    }
+    # Loop through the GLOBAL dictionary
+    for country, (lat, lon) in WORLD_LOCATIONS.items():
+        climate = fetch_climate_data(cur, lat, lon)
+        if climate:
+            score, _, _ = calculate_score_logic(plant, climate)
+            results.append({"country": country, "lat": lat, "lon": lon, "score": score})
 
-    # Sample around each country center
-    for country, (lat, lon) in country_centers.items():
-        # Check if country is in our bounds
-        if (
-            bounds["lat_min"] <= lat <= bounds["lat_max"]
-            and bounds["lon_min"] <= lon <= bounds["lon_max"]
-        ):
-
-            # Sample 5 points around each country center
-            offsets = [
-                (0, 0),  # center
-                (1, 0),
-                (-1, 0),  # north/south
-                (0, 1),
-                (0, -1),  # east/west
-            ]
-
-            country_scores = []
-            for dlat, dlon in offsets:
-                test_lat = lat + dlat
-                test_lon = lon + dlon
-
-                res = analyze_suitability(plant_name, test_lat, test_lon)
-                if "error" not in res:
-                    country_scores.append(res["score"])
-
-            # Average score for this country
-            if country_scores:
-                avg_score = sum(country_scores) / len(country_scores)
-                results.append(
-                    {"country": country, "lat": lat, "lon": lon, "score": avg_score}
-                )
-
-    if not results:
-        return pd.DataFrame(columns=["country", "lat", "lon", "score"])
-
+    conn.close()
+    print(f"--- SCAN COMPLETE: {len(results)} countries analyzed ---")
     return pd.DataFrame(results)
 
 
-def get_continent_bounds(lat, lon):
-    """Returns approximate bounds for the continent"""
-    # Europe
-    if 35 <= lat <= 70 and -10 <= lon <= 40:
-        return {
-            "lat_min": 35,
-            "lat_max": 70,
-            "lon_min": -10,
-            "lon_max": 40,
-            "name": "Europe",
-        }
-    # North America
-    elif 15 <= lat <= 70 and -170 <= lon <= -50:
-        return {
-            "lat_min": 15,
-            "lat_max": 70,
-            "lon_min": -170,
-            "lon_max": -50,
-            "name": "North America",
-        }
-    # South America
-    elif -55 <= lat <= 15 and -85 <= lon <= -35:
-        return {
-            "lat_min": -55,
-            "lat_max": 15,
-            "lon_min": -85,
-            "lon_max": -35,
-            "name": "South America",
-        }
-    # Africa
-    elif -35 <= lat <= 37 and -20 <= lon <= 52:
-        return {
-            "lat_min": -35,
-            "lat_max": 37,
-            "lon_min": -20,
-            "lon_max": 52,
-            "name": "Africa",
-        }
-    # Asia
-    elif 5 <= lat <= 70 and 40 <= lon <= 150:
-        return {
-            "lat_min": 5,
-            "lat_max": 70,
-            "lon_min": 40,
-            "lon_max": 150,
-            "name": "Asia",
-        }
-    # Oceania
-    elif -50 <= lat <= 0 and 110 <= lon <= 180:
-        return {
-            "lat_min": -50,
-            "lat_max": 0,
-            "lon_min": 110,
-            "lon_max": 180,
-            "name": "Oceania",
-        }
-
-    return {
-        "lat_min": lat - 10,
-        "lat_max": lat + 10,
-        "lon_min": lon - 10,
-        "lon_max": lon + 10,
-        "name": "Region",
-    }
-
-
 def get_top_countries(plant_name, scan_df):
-    """
-    Estimates top countries from scan data
-    Returns empty DataFrame if not enough data
-    """
-    if scan_df.empty or len(scan_df) < 10:
-        return pd.DataFrame(columns=["country", "avg_score"])
-
-    def estimate_country(lat, lon):
-        if 40 <= lat <= 44 and -9 <= lon <= 3:
-            return "Spain"
-        elif 41 <= lat <= 51 and -5 <= lon <= 10:
-            return "France"
-        elif 45 <= lat <= 55 and 5 <= lon <= 15:
-            return "Germany"
-        elif 36 <= lat <= 47 and 6 <= lon <= 19:
-            return "Italy"
-        elif 49 <= lat <= 60 and -8 <= lon <= 2:
-            return "United Kingdom"
-        elif 36 <= lat <= 43 and 19 <= lon <= 29:
-            return "Greece"
-        elif 38 <= lat <= 42 and 26 <= lon <= 45:
-            return "Turkey"
-        elif 55 <= lat <= 70 and 10 <= lon <= 31:
-            return "Scandinavia"
-        elif 45 <= lat <= 56 and 14 <= lon <= 24:
-            return "Poland"
-        elif 41 <= lat <= 52 and -10 <= lon <= -6:
-            return "Portugal"
-        elif 56 <= lat <= 70 and 20 <= lon <= 35:
-            return "Baltic States"
-        elif 43 <= lat <= 50 and 20 <= lon <= 30:
-            return "Balkans"
-        else:
-            return "Other"
-
-    scan_df["country"] = scan_df.apply(
-        lambda row: estimate_country(row["lat"], row["lon"]), axis=1
-    )
-
-    country_scores = (
-        scan_df.groupby("country")["score"].agg(["mean", "count"]).reset_index()
-    )
-    country_scores.columns = ["country", "avg_score", "count"]
-
-    # Filter: must have at least 2 samples and not be "Other"
-    country_scores = country_scores[
-        (country_scores["country"] != "Other") & (country_scores["count"] >= 2)
-    ]
-
-    # Sort and get top 10
-    if len(country_scores) == 0:
-        return pd.DataFrame(columns=["country", "avg_score"])
-
-    top_countries = country_scores.nlargest(min(10, len(country_scores)), "avg_score")[
-        ["country", "avg_score"]
-    ]
-
-    return top_countries
-
-
-def get_top_countries(plant_name, scan_df):
-    """
-    Estimates top countries from scan data
-    Groups by approximate country regions and returns top performers
-    """
     if scan_df.empty:
         return pd.DataFrame(columns=["country", "avg_score"])
-
-    # Simple country mapping based on lat/lon (Europe focused)
-    def estimate_country(lat, lon):
-        # This is a simplified version - you could use a proper geocoding API
-        if 40 <= lat <= 44 and -9 <= lon <= 3:
-            return "Spain"
-        elif 41 <= lat <= 51 and -5 <= lon <= 10:
-            return "France"
-        elif 45 <= lat <= 55 and 5 <= lon <= 15:
-            return "Germany"
-        elif 36 <= lat <= 47 and 6 <= lon <= 19:
-            return "Italy"
-        elif 49 <= lat <= 60 and -8 <= lon <= 2:
-            return "United Kingdom"
-        elif 36 <= lat <= 43 and 19 <= lon <= 29:
-            return "Greece"
-        elif 38 <= lat <= 42 and 26 <= lon <= 45:
-            return "Turkey"
-        elif 55 <= lat <= 70 and 10 <= lon <= 31:
-            return "Scandinavia"
-        elif 45 <= lat <= 56 and 14 <= lon <= 24:
-            return "Poland"
-        elif 41 <= lat <= 52 and -10 <= lon <= -6:
-            return "Portugal"
-        else:
-            return "Other"
-
-    scan_df["country"] = scan_df.apply(
-        lambda row: estimate_country(row["lat"], row["lon"]), axis=1
+    # No need to group by, scan_df already has unique countries
+    # Just sort and return
+    return (
+        scan_df.sort_values("score", ascending=False)
+        .head(10)
+        .rename(columns={"score": "avg_score"})
     )
-
-    # Group by country and get average score
-    country_scores = (
-        scan_df.groupby("country")["score"].agg(["mean", "count"]).reset_index()
-    )
-    country_scores.columns = ["country", "avg_score", "count"]
-
-    # Filter out "Other" and countries with too few samples
-    country_scores = country_scores[
-        (country_scores["country"] != "Other") & (country_scores["count"] >= 3)
-    ]
-
-    # Sort by score and get top 10
-    top_countries = country_scores.nlargest(10, "avg_score")[["country", "avg_score"]]
-
-    return top_countries
