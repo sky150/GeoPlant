@@ -90,7 +90,7 @@ with st.container():
     c1, c2 = st.columns([1, 2], gap="large")
 
     with c1:
-        st.markdown("### 1. SELECT CROP")
+        st.markdown("### 1. SELECT PLANT")
         try:
             plant_list = backend_api.get_plant_list()
         except:
@@ -121,7 +121,7 @@ with st.container():
             st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🚀 RUN GLOBAL ANALYSIS", type="primary", use_container_width=True):
+    if st.button("RUN GLOBAL ANALYSIS", type="primary", use_container_width=True):
         with st.spinner("Scanning 190+ Countries..."):
             # 1. Analyze Point
             res = backend_api.analyze_suitability(
@@ -153,7 +153,7 @@ if st.session_state.analysis_result:
 
         with c1:
             st.markdown(
-                '<div class="chart-title">SUITABILITY</div>', unsafe_allow_html=True
+                '<div class="chart-title">SUITABILITY SCORE</div>', unsafe_allow_html=True
             )
             st.plotly_chart(
                 create_circular_gauge(score, real_data=res, height=320),
@@ -180,6 +180,7 @@ if st.session_state.analysis_result:
 
         # Removed the divider line between top charts and map section
 
+
         # --- ROW 2: MAP & TOP LIST ---
         m1, m2 = st.columns([3, 1])
 
@@ -191,24 +192,52 @@ if st.session_state.analysis_result:
                 )
                 scan_df = st.session_state.regional_scan
 
+                # Karte initialisieren
                 m_global = folium.Map(
                     location=[20, 0], zoom_start=2, tiles="CartoDB positron"
                 )
 
-                folium.Choropleth(
-                    geo_data="https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/world-countries.json",
+                # --- CUSTOM COLOR LOGIC ---
+                # 1. Dictionary für schnellen Zugriff: {LandName: Score}
+                score_dict = scan_df.set_index('country')['score'].to_dict()
+
+                # 2. Style Funktion definieren (Harte Farbgrenzen für Pop-Art Look)
+                def style_function(feature):
+                    country_name = feature['properties']['name']
+                    score = score_dict.get(country_name, None)
+
+                    # Default (Keine Daten): Grau
+                    fill_color = "#f0f0f0"
+
+                    if score is not None:
+                        if score >= 75:
+                            fill_color = "#BDD409"  # C_LIME
+                        elif score >= 45:
+                            fill_color = "#d1d1d1"  # C_MED_BLUE
+                        else:
+                            fill_color = "#d1d1d1"  # C_PINK
+
+                    return {
+                        'fillColor': fill_color,
+                        'color': 'black',       # Schwarze Landesgrenzen
+                        'weight': 1,            # Dünne Linie
+                        'fillOpacity': 0.8
+                    }
+
+                # 3. GeoJson Layer hinzufügen (statt Standard Choropleth)
+                folium.GeoJson(
+                    "https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/world-countries.json",
                     name="Suitability",
-                    data=scan_df,
-                    columns=["country", "score"],
-                    key_on="feature.properties.name",
-                    fill_color="Greens",
-                    fill_opacity=0.8,
-                    line_opacity=0.2,
-                    legend_name="Suitability Score (0-100)",
-                    bins=[0, 20, 40, 60, 80, 100],
-                    nan_fill_color="#f0f0f0",
-                    highlight=True,
+                    style_function=style_function,
+                    tooltip=folium.GeoJsonTooltip(
+                        fields=['name'],
+                        aliases=['Country:'],
+                        style="font-family: Poppins; font-size: 14px;"
+                    )
                 ).add_to(m_global)
+
+                # (Optional) Einfache Legende als HTML darüber oder darunter,
+                # da GeoJson keine automatische Farblegende generiert.
 
                 st_folium(m_global, height=500, use_container_width=True)
 
