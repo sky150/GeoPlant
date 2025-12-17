@@ -1,236 +1,254 @@
 import streamlit as st
-import plotly.graph_objects as go
-import plotly.express as px
 import pandas as pd
-import numpy as np
 import folium
 from streamlit_folium import st_folium
-import backend_api  # This imports your logic file
+import backend_api
+from charts import (
+    create_radar_chart,
+    create_diverging_bar_chart,
+    create_top_countries_chart,
+    create_circular_gauge,
+)
+
+st.set_page_config(page_title="GeoPlant", layout="wide", page_icon="🌱")
 
 # ---------------------------------------------------------
-# UI CONFIGURATION
+# CSS & STYLING
 # ---------------------------------------------------------
-st.set_page_config(page_title="GeoPlant Analytics", layout="wide", page_icon="🌱")
+st.markdown(
+    """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Poppins:wght@400;600&display=swap');
 
-COLOR_IDEAL = "#2ECC71"  # Green
-COLOR_RISK = "#E74C3C"   # Red
-COLOR_WARN = "#F1C40F"   # Orange
+html, body, [class*="css"] { font-family: 'Poppins', sans-serif; }
+:root { --c-dark-blue: #1162AC; --c-pink: #F15CE3; --c-yellow: #DAFF15; --c-med-blue: #1F89D8; }
 
-# Initialize Session State for Coordinates (So they survive reloads)
-if 'lat' not in st.session_state: st.session_state.lat = 47.3769 # Default: Zurich
-if 'lon' not in st.session_state: st.session_state.lon = 8.5417
+h1 { font-family: 'Montserrat', sans-serif !important; font-weight: 900 !important; color: var(--c-dark-blue); text-transform: uppercase; }
+
+/* 1. AUTO-STYLE PLOTLY CHARTS AS CARDS */
+.stPlotlyChart {
+    background-color: white;
+    border: 3px solid black;
+    border-radius: 15px;
+    box-shadow: 5px 5px 0px 0px #000000;
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+/* 2. AUTO-STYLE FOLIUM MAP AS CARD */
+iframe {
+    border: 3px solid black !important;
+    border-radius: 15px !important;
+    box-shadow: 5px 5px 0px 0px #000000 !important;
+    background-color: white;
+    padding: 5px;
+}
+
+.stButton > button { background: var(--c-pink); color: white; border: 3px solid black; font-weight: 900; box-shadow: 4px 4px 0px 0px #000000; text-transform: uppercase; }
+.stButton > button:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0px 0px #000000; color:white; border-color:black; }
+
+/* Centered Section Titles */
+.chart-title {
+    text-align: center;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# Session State
+if "lat" not in st.session_state:
+    st.session_state.lat = 47.3769
+if "lon" not in st.session_state:
+    st.session_state.lon = 8.5417
+if "analysis_result" not in st.session_state:
+    st.session_state.analysis_result = None
+if "regional_scan" not in st.session_state:
+    st.session_state.regional_scan = pd.DataFrame()
 
 # ---------------------------------------------------------
 # HEADER
 # ---------------------------------------------------------
-st.title("🌍 GeoPlant: Smart Crop Suitability Engine")
-st.markdown("Precision agriculture tool powered by **PostGIS** and **CHELSA Climate Data**.")
+st.markdown(
+    """
+<div style="text-align: center; margin-bottom: 3rem;">
+    <h1 style="margin:0; font-size: 4rem;">G E O P L A N T</h1>
+    <div style="font-weight:700; letter-spacing:3px;">GLOBAL CROP ANALYTICS DASHBOARD</div>
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------
-# STEP 1: SELECT PLANT
+# INPUT SECTION
 # ---------------------------------------------------------
 with st.container():
-    st.markdown("### 1️⃣ Select Crop")
-    
-    # Fetch plant list from the Database via Backend API
-    try:
-        plant_list = backend_api.get_plant_list()
-    except Exception:
-        plant_list = []
+    c1, c2 = st.columns([1, 2], gap="large")
 
-    if not plant_list:
-        st.error("🚨 Database Error: Could not fetch plants. Run `clean_and_upload.py` first.")
-        st.stop()
-        
-    selected_plant = st.selectbox("I want to grow:", plant_list)
+    with c1:
+        st.markdown("### 1. SELECT PLANT")
+        try:
+            plant_list = backend_api.get_plant_list()
+        except:
+            plant_list = []
+        if not plant_list:
+            st.error("Database Empty")
+            st.stop()
+        selected_plant = st.selectbox("Plant:", plant_list)
 
-# ---------------------------------------------------------
-# STEP 2: SELECT LOCATION (Interactive Map)
-# ---------------------------------------------------------
-st.divider()
-st.markdown("### 2️⃣ Select Location")
+    with c2:
+        st.markdown("### 2. PICK LOCATION")
+        # Input Map (Folium - Clean Tiles)
+        m = folium.Map(
+            location=[st.session_state.lat, st.session_state.lon],
+            zoom_start=4,
+            tiles="CartoDB positron",
+            height=250,
+        )
+        folium.Marker(
+            [st.session_state.lat, st.session_state.lon],
+            icon=folium.Icon(color="green", icon="leaf"),
+        ).add_to(m)
 
-col_map, col_controls = st.columns([2, 1])
-
-with col_map:
-    # Create the base map
-    m = folium.Map(location=[st.session_state.lat, st.session_state.lon], zoom_start=5)
-    
-    # Add a marker for the current selection
-    folium.Marker(
-        [st.session_state.lat, st.session_state.lon], 
-        popup="Selected Target", 
-        tooltip="Click anywhere to move me",
-        icon=folium.Icon(color="green", icon="leaf")
-    ).add_to(m)
-    
-    # Render the map and capture clicks
-    st.caption("👇 Click anywhere on the map to update coordinates.")
-    map_output = st_folium(m, height=400, use_container_width=True)
-
-    # LOGIC: If map was clicked, update the session state variables
-    if map_output['last_clicked']:
-        new_lat = map_output['last_clicked']['lat']
-        new_lng = map_output['last_clicked']['lng']
-        
-        # Only rerun if the click is actually new (prevents infinite loops)
-        if round(new_lat, 4) != round(st.session_state.lat, 4):
-            st.session_state.lat = new_lat
-            st.session_state.lon = new_lng
+        map_out = st_folium(m, height=250, use_container_width=True)
+        if map_out["last_clicked"]:
+            st.session_state.lat = map_out["last_clicked"]["lat"]
+            st.session_state.lon = map_out["last_clicked"]["lng"]
             st.rerun()
 
-with col_controls:
-    st.markdown("**Coordinates**")
-    
-    # These inputs are linked to session_state
-    lat_input = st.number_input("Latitude", value=st.session_state.lat, format="%.4f", key="input_lat")
-    lon_input = st.number_input("Longitude", value=st.session_state.lon, format="%.4f", key="input_lon")
-    
-    # Sync manual number input changes back to session state
-    if lat_input != st.session_state.lat:
-        st.session_state.lat = lat_input
-        st.rerun()
-    if lon_input != st.session_state.lon:
-        st.session_state.lon = lon_input
-        st.rerun()
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("RUN GLOBAL ANALYSIS", type="primary", use_container_width=True):
+        with st.spinner("Scanning 190+ Countries..."):
+            # 1. Analyze Point
+            res = backend_api.analyze_suitability(
+                selected_plant, st.session_state.lat, st.session_state.lon
+            )
+            st.session_state.analysis_result = res
 
-    st.markdown("---")
-    run_btn = st.button("🚀 Analyze Suitability", type="primary", use_container_width=True)
+            # 2. Global Scan
+            if "error" not in res:
+                st.session_state.regional_scan = backend_api.scan_continent_heatmap(
+                    selected_plant, 0, 0
+                )
+            st.rerun()
 
 # ---------------------------------------------------------
-# STEP 3: RESULTS ENGINE
+# RESULTS
 # ---------------------------------------------------------
-if run_btn:
-    st.divider()
-    
-    # Call the Backend API (The "Black Box")
-    with st.spinner(f"Querying 50GB Climate Database for {selected_plant}..."):
-        result = backend_api.analyze_suitability(selected_plant, st.session_state.lat, st.session_state.lon)
+if st.session_state.analysis_result:
+    res = st.session_state.analysis_result
 
-    # Error Handling
-    if "error" in result:
-        st.error(f"❌ Analysis Failed: {result['error']}")
+    if "error" in res:
+        st.error(res["error"])
     else:
-        # Unpack Results
-        score = result['score']
-        status = result['status']
-        climate = result['climate']
-        plant = result['plant']
-        reasons = result['reasons']
+        score = res["score"]
+        st.divider()
 
-        # --- TOP SECTION: SCORE & STATUS ---
-        c1, c2 = st.columns([1, 2])
-        
+        # --- ROW 1: CHARTS (3 Cols) ---
+        c1, c2, c3 = st.columns([1, 1, 1])
+
         with c1:
-            # Gauge Chart
-            fig_gauge = go.Figure(go.Indicator(
-                mode = "gauge+number",
-                value = score,
-                title = {'text': "Suitability Score"},
-                gauge = {
-                    'axis': {'range': [0, 100]},
-                    'bar': {'color': COLOR_IDEAL if score > 80 else (COLOR_WARN if score > 40 else COLOR_RISK)},
-                    'steps': [{'range': [0, 100], 'color': "whitesmoke"}]
-                }
-            ))
-            fig_gauge.update_layout(height=250, margin=dict(t=30, b=20, l=20, r=20))
-            st.plotly_chart(fig_gauge, use_container_width=True)
+            st.markdown(
+                '<div class="chart-title">SUITABILITY SCORE</div>', unsafe_allow_html=True
+            )
+            st.plotly_chart(
+                create_circular_gauge(score, real_data=res, height=320),
+                use_container_width=True,
+            )
 
         with c2:
-            st.subheader(f"Status: {status}")
-            
-            # Display Issues or Success Message
-            if reasons:
-                for issue in reasons:
-                    if "CRITICAL" in issue:
-                        st.error(issue)
-                    else:
-                        st.warning(issue)
-            else:
-                st.success(f"✅ Perfect Match! {selected_plant} will thrive here.")
+            st.markdown(
+                '<div class="chart-title">CONDITIONS</div>', unsafe_allow_html=True
+            )
+            st.plotly_chart(
+                create_radar_chart(selected_plant, "Loc", res, height=320),
+                use_container_width=True,
+            )
 
-            # Display Real Data Summary
-            st.info(f"""
-            **Local Climate Data (From Database):**
-            ❄️ Winter Low: **{climate['min_temp']}°C** (Plant needs > {plant['Min_Temp']}°C)
-            ☀️ Summer High: **{climate['max_temp']}°C**
-            💧 Annual Rain: **{climate['rain']}mm** (Plant needs {plant['Min_Rain']}mm)
-            """)
+        with c3:
+            st.markdown(
+                '<div class="chart-title">DEVIATION</div>', unsafe_allow_html=True
+            )
+            st.plotly_chart(
+                create_diverging_bar_chart(selected_plant, "Loc", res, height=320),
+                use_container_width=True,
+            )
 
-        # --- BOTTOM SECTION: VISUAL DIAGNOSTICS ---
-        st.subheader("🔬 Diagnostic Charts")
-        tab1, tab2 = st.tabs(["Radar Analysis", "Seasonal Projection"])
+        # Removed the divider line between top charts and map section
 
-        with tab1:
-            # --- RADAR CHART LOGIC ---
-            # Helper to normalize values to 0-1 for the chart
-            def norm(val, min_v, max_v):
-                return (val - min_v) / (max_v - min_v) if max_v != min_v else 0.5
-            
-            categories = ['Temp', 'Rain', 'pH', 'Humidity', 'Sun', 'Elevation']
-            
-            # Global Bounds (The "World" Limits)
-            bounds = {
-                'Temp': (-10, 40), 'Rain': (0, 3000), 'pH': (4, 9),
-                'Hum': (20, 100), 'Sun': (0, 100), 'Elev': (0, 3000)
-            }
 
-            # Prepare Data for Chart
-            # 1. Plant Limits (Green Zone)
-            p_min = [
-                norm(plant['Min_Temp'], *bounds['Temp']), norm(plant['Min_Rain'], *bounds['Rain']),
-                norm(plant['Min_pH'], *bounds['pH']), norm(plant['Ideal_Hum']-20, *bounds['Hum']),
-                norm(plant['Sun_Need']-20, *bounds['Sun']), 0
-            ]
-            p_max = [
-                norm(plant['Max_Temp'], *bounds['Temp']), norm(plant['Max_Rain'], *bounds['Rain']),
-                norm(plant['Max_pH'], *bounds['pH']), norm(plant['Ideal_Hum']+20, *bounds['Hum']),
-                norm(plant['Sun_Need']+20, *bounds['Sun']), norm(plant['Max_Elev'], *bounds['Elev'])
-            ]
-            
-            # 2. Actual Location Data (Blue Line)
-            loc_val = [
-                norm(climate['mean_temp'], *bounds['Temp']), norm(climate['rain'], *bounds['Rain']),
-                norm(climate['ph'], *bounds['pH']), norm(climate['humidity'], *bounds['Hum']),
-                norm(climate['sun'], *bounds['Sun']), norm(climate['elevation'], *bounds['Elev'])
-            ]
-            
-            # Close the polygon loop (connect end to start)
-            p_min += [p_min[0]]; p_max += [p_max[0]]; loc_val += [loc_val[0]]
-            cats = categories + [categories[0]]
+        # --- ROW 2: MAP & TOP LIST ---
+        m1, m2 = st.columns([3, 1])
 
-            # Plot
-            fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(r=p_max, theta=cats, fill='toself', fillcolor='rgba(46, 204, 113, 0.2)', line=dict(color='green'), name='Safe Zone (Max)'))
-            fig_radar.add_trace(go.Scatterpolar(r=p_min, theta=cats, fill='toself', fillcolor='white', line=dict(color='green', dash='dot'), name='Safe Zone (Min)'))
-            fig_radar.add_trace(go.Scatterpolar(r=loc_val, theta=cats, line=dict(color='blue', width=3), name='Actual Location'))
-            
-            fig_radar.update_layout(polar=dict(radialaxis=dict(visible=False, range=[0, 1])), showlegend=True, height=450)
-            st.plotly_chart(fig_radar, use_container_width=True)
-            st.caption("*Note: pH, Sun, and Humidity are currently simulated/mocked values.")
+        if not st.session_state.regional_scan.empty:
+            with m1:
+                st.markdown(
+                    '<div class="chart-title" style="text-align: left;">GLOBAL MAP</div>',
+                    unsafe_allow_html=True,
+                )
+                scan_df = st.session_state.regional_scan
 
-        with tab2:
-            # --- SEASONALITY CHART LOGIC ---
-            months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-            
-            # Simulate a Sine Wave for the year using the Real Min/Max from DB
-            # We assume coldest is Jan, hottest is July
-            amp = (climate['max_temp'] - climate['min_temp']) / 2
-            mean = (climate['max_temp'] + climate['min_temp']) / 2
-            
-            # Use negative Cosine to put the valley in Jan and peak in July
-            sim_temps = [mean + amp * -np.cos(i * 2 * np.pi / 12) for i in range(12)]
-            
-            fig_line = go.Figure()
-            
-            # Draw Green Safe Band
-            fig_line.add_hrect(y0=plant['Min_Temp'], y1=plant['Max_Temp'], fillcolor="green", opacity=0.15, line_width=0, annotation_text="Safe Temperature Zone")
-            
-            # Draw Temperature Curve
-            fig_line.add_trace(go.Scatter(x=months, y=sim_temps, mode='lines+markers', line=dict(color='blue', width=4), name="Projected Temp"))
-            
-            # Draw Freezing Line
-            fig_line.add_hline(y=0, line_dash="dash", line_color="navy", annotation_text="Freezing (0°C)")
+                # Karte initialisieren
+                m_global = folium.Map(
+                    location=[20, 0], zoom_start=2, tiles="CartoDB positron"
+                )
 
-            fig_line.update_layout(title="Annual Temperature Cycle vs Plant Limits", yaxis_title="Temperature (°C)", height=450)
-            st.plotly_chart(fig_line, use_container_width=True)
+                # --- CUSTOM COLOR LOGIC ---
+                # 1. Dictionary für schnellen Zugriff: {LandName: Score}
+                score_dict = scan_df.set_index('country')['score'].to_dict()
+
+                # 2. Style Funktion definieren (Harte Farbgrenzen für Pop-Art Look)
+                def style_function(feature):
+                    country_name = feature['properties']['name']
+                    score = score_dict.get(country_name, None)
+
+                    # Default (Keine Daten): Grau
+                    fill_color = "#f0f0f0"
+
+                    if score is not None:
+                        if score >= 75:
+                            fill_color = "#BDD409"  # C_LIME
+                        elif score >= 45:
+                            fill_color = "#d1d1d1"  # C_MED_BLUE
+                        else:
+                            fill_color = "#d1d1d1"  # C_PINK
+
+                    return {
+                        'fillColor': fill_color,
+                        'color': 'black',       # Schwarze Landesgrenzen
+                        'weight': 1,            # Dünne Linie
+                        'fillOpacity': 0.8
+                    }
+
+                # 3. GeoJson Layer hinzufügen (statt Standard Choropleth)
+                folium.GeoJson(
+                    "https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/world-countries.json",
+                    name="Suitability",
+                    style_function=style_function,
+                    tooltip=folium.GeoJsonTooltip(
+                        fields=['name'],
+                        aliases=['Country:'],
+                        style="font-family: Poppins; font-size: 14px;"
+                    )
+                ).add_to(m_global)
+
+                # (Optional) Einfache Legende als HTML darüber oder darunter,
+                # da GeoJson keine automatische Farblegende generiert.
+
+                st_folium(m_global, height=500, use_container_width=True)
+
+            with m2:
+                st.markdown(
+                    '<div class="chart-title">TOP REGIONS</div>', unsafe_allow_html=True
+                )
+                top = backend_api.get_top_countries(
+                    selected_plant, st.session_state.regional_scan
+                )
+                st.plotly_chart(
+                    create_top_countries_chart(top, height=500),
+                    use_container_width=True,
+                )
