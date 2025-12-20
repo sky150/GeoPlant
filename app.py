@@ -153,7 +153,8 @@ if st.session_state.analysis_result:
 
         with c1:
             st.markdown(
-                '<div class="chart-title">SUITABILITY SCORE</div>', unsafe_allow_html=True
+                '<div class="chart-title">SUITABILITY SCORE</div>',
+                unsafe_allow_html=True,
             )
             st.plotly_chart(
                 create_circular_gauge(score, real_data=res, height=320),
@@ -180,7 +181,6 @@ if st.session_state.analysis_result:
 
         # Removed the divider line between top charts and map section
 
-
         # --- ROW 2: MAP & TOP LIST ---
         m1, m2 = st.columns([3, 1])
 
@@ -199,11 +199,11 @@ if st.session_state.analysis_result:
 
                 # --- CUSTOM COLOR LOGIC ---
                 # 1. Dictionary für schnellen Zugriff: {LandName: Score}
-                score_dict = scan_df.set_index('country')['score'].to_dict()
+                score_dict = scan_df.set_index("country")["score"].to_dict()
 
                 # 2. Style Funktion definieren (Harte Farbgrenzen für Pop-Art Look)
                 def style_function(feature):
-                    country_name = feature['properties']['name']
+                    country_name = feature["properties"]["name"]
                     score = score_dict.get(country_name, None)
 
                     # Default (Keine Daten): Grau
@@ -218,10 +218,10 @@ if st.session_state.analysis_result:
                             fill_color = "#d1d1d1"  # C_PINK
 
                     return {
-                        'fillColor': fill_color,
-                        'color': 'black',       # Schwarze Landesgrenzen
-                        'weight': 1,            # Dünne Linie
-                        'fillOpacity': 0.8
+                        "fillColor": fill_color,
+                        "color": "black",  # Schwarze Landesgrenzen
+                        "weight": 1,  # Dünne Linie
+                        "fillOpacity": 0.8,
                     }
 
                 # 3. GeoJson Layer hinzufügen (statt Standard Choropleth)
@@ -230,10 +230,10 @@ if st.session_state.analysis_result:
                     name="Suitability",
                     style_function=style_function,
                     tooltip=folium.GeoJsonTooltip(
-                        fields=['name'],
-                        aliases=['Country:'],
-                        style="font-family: Poppins; font-size: 14px;"
-                    )
+                        fields=["name"],
+                        aliases=["Country:"],
+                        style="font-family: Poppins; font-size: 14px;",
+                    ),
                 ).add_to(m_global)
 
                 # (Optional) Einfache Legende als HTML darüber oder darunter,
