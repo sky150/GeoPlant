@@ -44,6 +44,31 @@ iframe {
     padding: 5px;
 }
 
+/* 3. CARD STYLING */
+.pop-card {
+    background: white;
+    border: 3px solid black;
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: 5px 5px 0px 0px #000000;
+    margin-bottom: 20px;
+}
+
+.pop-card h3 {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    color: #333;
+    font-size: 1rem;
+    text-transform: uppercase;
+}
+
+/* 4. STATS LAYOUT (New classes for the cards) */
+.stat-container { display: flex; justify-content: space-between; text-align: left; gap: 25px; }
+.stat-item { width: 32%; }
+.stat-label { font-size: 0.8rem; color: #666; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+.stat-value { font-size: 1.1rem; font-weight: 700; color: black; }
+.stat-sub { font-size: 0.75rem; color: #999; margin-top: 2px; }
+
 .stButton > button { background: var(--c-pink); color: white; border: 3px solid black; font-weight: 900; box-shadow: 4px 4px 0px 0px #000000; text-transform: uppercase; }
 .stButton > button:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0px 0px #000000; color:white; border-color:black; }
 
@@ -146,7 +171,60 @@ if st.session_state.analysis_result:
         st.error(res["error"])
     else:
         score = res["score"]
+        plant = res["plant"]
+        climate = res["climate"]
+
         st.divider()
+        # --- NEW: KPI LAYER (Crop Info & Climate Summary) ---
+        k1, k2 = st.columns(2)
+
+        with k1:
+            st.markdown(
+                f"""
+            <div class="pop-card">
+                <h3>Crop Requirements: {plant['name']}</h3>
+                <div class="stat-container">
+                    <div class="stat-item">
+                        <div class="stat-label">Optimal Temp</div>
+                        <div class="stat-value">{plant['Min_Temp']}°C to {plant['Max_Temp']}°C</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Water Demand</div>
+                        <div class="stat-value">{plant['Min_Rain']} - {plant['Max_Rain']} mm</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Soil pH</div>
+                        <div class="stat-value">{plant['Min_pH']} - {plant['Max_pH']}</div>
+                    </div>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+        with k2:
+            st.markdown(
+                f"""
+            <div class="pop-card">
+                <h3>Location Climate Summary</h3>
+                <div class="stat-container">
+                    <div class="stat-item">
+                        <div class="stat-label">Winter Low</div>
+                        <div class="stat-value">{climate['min_temp']}°C</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Summer High</div>
+                        <div class="stat-value">{climate['max_temp']}°C</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Annual Rain</div>
+                        <div class="stat-value">{climate['rain']} mm</div>
+                    </div>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
 
         # --- ROW 1: CHARTS (3 Cols) ---
         c1, c2, c3 = st.columns([1, 1, 1])
@@ -198,15 +276,11 @@ if st.session_state.analysis_result:
                 )
 
                 # --- CUSTOM COLOR LOGIC ---
-                # 1. Dictionary für schnellen Zugriff: {LandName: Score}
                 score_dict = scan_df.set_index("country")["score"].to_dict()
 
-                # 2. Style Funktion definieren (Harte Farbgrenzen für Pop-Art Look)
                 def style_function(feature):
                     country_name = feature["properties"]["name"]
                     score = score_dict.get(country_name, None)
-
-                    # Default (Keine Daten): Grau
                     fill_color = "#f0f0f0"
 
                     if score is not None:
@@ -219,12 +293,11 @@ if st.session_state.analysis_result:
 
                     return {
                         "fillColor": fill_color,
-                        "color": "black",  # Schwarze Landesgrenzen
-                        "weight": 1,  # Dünne Linie
+                        "color": "black",
+                        "weight": 1,
                         "fillOpacity": 0.8,
                     }
 
-                # 3. GeoJson Layer hinzufügen (statt Standard Choropleth)
                 folium.GeoJson(
                     "https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/world-countries.json",
                     name="Suitability",

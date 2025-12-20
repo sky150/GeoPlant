@@ -83,6 +83,7 @@ def _convert_real_data_to_df(real_data):
 # CHART GENERATORS
 # --------------------------------------------------------------------------
 
+
 def create_circular_gauge(score, real_data=None, height=350):
     """
     Modern Segmented Block Gauge showing REAL DATA METRICS at the top.
@@ -110,7 +111,7 @@ def create_circular_gauge(score, real_data=None, height=350):
             direction="clockwise",
             textinfo="none",
             marker=dict(colors=colors, line=dict(color="white", width=3)),
-            domain={"x": [0, 1], "y": [0, 0.85]},
+            domain={"x": [0, 1], "y": [0, 1]},
             hoverinfo="skip",
         )
     )
@@ -118,7 +119,7 @@ def create_circular_gauge(score, real_data=None, height=350):
     # --- 3. CENTER TEXT (Score) ---
     fig.add_annotation(
         x=0.5,
-        y=0.425,
+        y=0.55,
         text=f"{int(score)}",
         showarrow=False,
         font=dict(size=70, family=FONT_MAIN, color=C_DARK_BLUE),
@@ -127,41 +128,11 @@ def create_circular_gauge(score, real_data=None, height=350):
     # 4. Suitability Label
     fig.add_annotation(
         x=0.5,
-        y=0.20,
+        y=0.30,
         text="SUITABILITY",
         showarrow=False,
         font=dict(size=14, family="Poppins", color="gray", weight="bold"),
     )
-
-    # 5. Top Metrics (Temp, Rain, pH) - Zeigt absolute Werte an
-    if real_data:
-        clim = real_data["climate"]
-
-        val_temp = f"{clim['min_temp']}°"
-        val_rain = f"{clim['rain']}mm"
-        val_ph = f"{clim['ph']}"
-
-        metrics = [
-            (val_temp, "MIN TEMP", 0.15),
-            (val_rain, "RAIN", 0.5),
-            (val_ph, "pH", 0.85),
-        ]
-
-        for val, label, x_pos in metrics:
-            fig.add_annotation(
-                x=x_pos,
-                y=1.0,
-                text=str(val),
-                showarrow=False,
-                font=dict(size=22, family=FONT_MAIN, color=C_BLACK),
-            )
-            fig.add_annotation(
-                x=x_pos,
-                y=0.90,
-                text=label,
-                showarrow=False,
-                font=dict(size=11, family="Poppins", color="gray"),
-            )
 
     fig.update_layout(
         height=height,
@@ -180,7 +151,7 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
 
     # Dynamische Skalierung: Wenn ein Wert 150% ist, muss der Chart bis mind. 150 gehen
     max_val = df["local_value"].max()
-    chart_range = [0, max(140, max_val + 10)] # Mindestens bis 140, sonst dynamisch
+    chart_range = [0, max(140, max_val + 10)]  # Mindestens bis 140, sonst dynamisch
 
     fig = go.Figure()
 
@@ -191,9 +162,9 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
             theta=df["condition"].tolist() + [df["condition"].iloc[0]],
             fill="toself",
             name=f"{plant_name} (Optimum)",
-            line=dict(color=C_BLACK, width=2, dash='dot'),
-            fillcolor="rgba(200, 200, 200, 0.2)", # Dezentes Grau für Basis
-            hoverinfo="skip"
+            line=dict(color=C_BLACK, width=2, dash="dot"),
+            fillcolor="rgba(200, 200, 200, 0.2)",  # Dezentes Grau für Basis
+            hoverinfo="skip",
         )
     )
 
@@ -215,15 +186,14 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
             angularaxis=dict(tickfont=dict(size=10)),
         ),
         showlegend=True,
-        legend=dict(
-            orientation="h", y=-0.15, font=dict(size=10)
-        ),
+        legend=dict(orientation="h", y=-0.15, font=dict(size=10)),
         height=height,
         margin=dict(t=10, b=30, l=35, r=35),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Poppins"},
     )
     return fig
+
 
 def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
     if not real_data:
@@ -263,9 +233,12 @@ def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
             showgrid=True,
             range=[-limit, limit],
         ),
-        yaxis=dict(tickfont=dict(size=11), categoryorder='array', categoryarray=order[::-1]),
+        yaxis=dict(
+            tickfont=dict(size=11), categoryorder="array", categoryarray=order[::-1]
+        ),
     )
     return fig
+
 
 # #def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
 #     if not real_data:
@@ -309,6 +282,7 @@ def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
 #     )
 #     return fig
 
+
 def create_top_countries_chart(top_countries_df, height=500):
     """
     Zeigt Top Countries als % vom Maximum (100% = bester Ort).
@@ -325,22 +299,22 @@ def create_top_countries_chart(top_countries_df, height=500):
     else:
         df["percentage"] = 0
 
-# def create_top_countries_chart(top_countries_df, height=500):
-#     if top_countries_df.empty:
-#         return go.Figure()
+    # def create_top_countries_chart(top_countries_df, height=500):
+    #     if top_countries_df.empty:
+    #         return go.Figure()
 
-#     df = top_countries_df.sort_values("avg_score", ascending=True)
+    #     df = top_countries_df.sort_values("avg_score", ascending=True)
 
     # --- FARBLOGIK ---
     # Wir weisen jedem Score direkt die Design-Farbe zu
     colors = []
     for s in df["avg_score"]:
         if s >= 75:
-            colors.append(C_LIME)      # Top: Lime Green
+            colors.append(C_LIME)  # Top: Lime Green
         elif s >= 45:
             colors.append(C_MED_BLUE)  # Mittel: Medium Blue
         else:
-            colors.append(C_PINK)      # Schlecht: Pink
+            colors.append(C_PINK)  # Schlecht: Pink
 
     fig = go.Figure()
     fig.add_trace(
@@ -352,7 +326,7 @@ def create_top_countries_chart(top_countries_df, height=500):
             marker=dict(color=colors, line=dict(color=C_BLACK, width=2)),
             text=[f"{x:.0f}" for x in df["avg_score"]],
             textposition="outside",
-            textfont=dict(family=FONT_MAIN, size=12, color=C_BLACK)
+            textfont=dict(family=FONT_MAIN, size=12, color=C_BLACK),
         )
     )
     fig.update_layout(
@@ -362,6 +336,6 @@ def create_top_countries_chart(top_countries_df, height=500):
         yaxis=dict(title="", tickfont=dict(family="Poppins", size=11, color="black")),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Poppins"},
-        plot_bgcolor="rgba(0,0,0,0)"
+        plot_bgcolor="rgba(0,0,0,0)",
     )
     return fig
