@@ -76,9 +76,11 @@ iframe {
 .chart-title {
     text-align: center;
     font-family: 'Montserrat', sans-serif;
-    font-weight: 700;
+    font-weight: 900;
     margin-bottom: 10px;
     text-transform: uppercase;
+    color: #333;
+
 }
 </style>
 """,
@@ -230,28 +232,18 @@ if st.session_state.analysis_result:
         c1, c2, c3 = st.columns([1, 1, 1])
 
         with c1:
-            st.markdown(
-                '<div class="chart-title">SUITABILITY SCORE</div>',
-                unsafe_allow_html=True,
-            )
             st.plotly_chart(
                 create_circular_gauge(score, real_data=res, height=320),
                 use_container_width=True,
             )
 
         with c2:
-            st.markdown(
-                '<div class="chart-title">CONDITIONS</div>', unsafe_allow_html=True
-            )
             st.plotly_chart(
                 create_radar_chart(selected_plant, "Loc", res, height=320),
                 use_container_width=True,
             )
 
         with c3:
-            st.markdown(
-                '<div class="chart-title">DEVIATION</div>', unsafe_allow_html=True
-            )
             st.plotly_chart(
                 create_diverging_bar_chart(selected_plant, "Loc", res, height=320),
                 use_container_width=True,
@@ -315,9 +307,6 @@ if st.session_state.analysis_result:
                 st_folium(m_global, height=500, use_container_width=True)
 
             with m2:
-                st.markdown(
-                    '<div class="chart-title">TOP REGIONS</div>', unsafe_allow_html=True
-                )
                 top = backend_api.get_top_countries(
                     selected_plant, st.session_state.regional_scan
                 )

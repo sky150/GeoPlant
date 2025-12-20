@@ -14,6 +14,13 @@ C_BLACK = "#000000"
 C_GREY = "#e6e6e6"
 FONT_MAIN = "Montserrat, Arial Black, sans-serif"
 
+TITLE_CONFIG = dict(
+    x=0.5,
+    xanchor="right",
+    y=0.99,
+    font=dict(family="Montserrat", size=16, color="#333", weight=900),
+)
+
 
 # --------------------------------------------------------------------------
 # LOGIC: CONVERT REAL DATA TO RELATIVE PERCENTAGES
@@ -135,6 +142,7 @@ def create_circular_gauge(score, real_data=None, height=350):
     )
 
     fig.update_layout(
+        title={**TITLE_CONFIG, "text": "<b>SUITABILITY SCORE</b>"},
         height=height,
         margin=dict(l=10, r=25, t=30, b=25),
         paper_bgcolor="rgba(0,0,0,0)",
@@ -181,6 +189,13 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
     )
 
     fig.update_layout(
+        title=dict(
+            text="<b>CONDITIONS</b>",
+            x=0.32,
+            xanchor="right",
+            y=0.99,
+            font=dict(family="Montserrat", size=16, color="#333"),
+        ),
         polar=dict(
             radialaxis=dict(visible=True, range=chart_range, tickfont=dict(size=8)),
             angularaxis=dict(tickfont=dict(size=10)),
@@ -188,7 +203,7 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
         showlegend=True,
         legend=dict(orientation="h", y=-0.15, font=dict(size=10)),
         height=height,
-        margin=dict(t=10, b=30, l=35, r=35),
+        margin=dict(t=30, b=10, l=35, r=35),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Poppins"},
     )
@@ -224,8 +239,15 @@ def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
     limit = max(50, max_diff + 20)
 
     fig.update_layout(
+        title=dict(
+            text="<b>DEVIATION</b>",
+            x=0.3,
+            xanchor="right",
+            y=0.99,
+            font=dict(family="Montserrat", size=16, color="#333"),
+        ),
         height=height,
-        margin=dict(t=20, b=20, l=10, r=40),
+        margin=dict(t=30, b=20, l=10, r=40),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Poppins"},
         xaxis=dict(
@@ -330,8 +352,9 @@ def create_top_countries_chart(top_countries_df, height=500):
         )
     )
     fig.update_layout(
+        title={**TITLE_CONFIG, "text": "TOP REGIONS"},
         height=height,
-        margin=dict(l=10, r=80, t=10, b=10),
+        margin=dict(l=10, r=80, t=30, b=10),
         xaxis=dict(showgrid=False, range=[0, 115], showticklabels=False),
         yaxis=dict(title="", tickfont=dict(family="Poppins", size=11, color="black")),
         paper_bgcolor="rgba(0,0,0,0)",
