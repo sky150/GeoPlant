@@ -170,7 +170,10 @@ with st.container():
         with st.spinner("Scanning 190+ Countries..."):
             # 1. Analyze Point
             res = backend_api.analyze_suitability(
-                selected_plant, st.session_state.lat, st.session_state.lon
+                selected_plant,
+                st.session_state.lat,
+                st.session_state.lon,
+                water_source=selected_water,
             )
             st.session_state.analysis_result = res
 
