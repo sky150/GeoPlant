@@ -1,6 +1,13 @@
-# 🌍 GeoPlant: Smart Crop Suitability Engine
+# 🌍 GeoPlant: Global Crop Suitability Engine
 
-**GeoPlant** is a Precision Agriculture dashboard that helps farmers and gardeners decide **where** to plant specific crops. It uses high-resolution climate rasters (CHELSA V2) and biological thresholds to calculate a "Survival Score" for any coordinate in Europe.
+**GeoPlant** is a Precision Agriculture dashboard that helps farmers and researchers decide **where** to plant specific crops. It uses high-resolution climate rasters (CHELSA V2) and biological thresholds (FAO EcoCrop) to calculate a "Suitability Score" for any coordinate on Earth.
+
+---
+
+## 📚 Documentation
+* **[Data Sources & Science](doc/data_sources.md):** Deep dive into CHELSA Climate Data and FAO EcoCrop logic.
+* **[Visualization Guide](doc/visualization_guide.md):** How to read the Radar, Gauge, and Deviation charts.
+* **[User Manual](doc/user_manual.md):** How to use filters like "Irrigation" and "Yield Targets."
 
 ---
 
@@ -11,10 +18,10 @@ The app follows a **Service-Oriented Architecture** running on Docker:
 1.  **Database Container (`geoplant_db`):**
     * Runs PostgreSQL + PostGIS.
     * Stores 50GB of Raster Data (Temperature, Rain, Drought metrics).
-    * Stores the Plant Rules (CSV converted to SQL).
+    * Stores the Plant Rules (FAO EcoCrop Data).
 2.  **App Container (`geoplant_app`):**
     * Runs Python Streamlit.
-    * **`backend_api.py` (The Brain):** Handles SQL connections and biological logic (e.g., "If Temp < 0, Plant Dies").
+    * **`backend_api.py` (The Brain):** Handles SQL connections and biological logic (e.g., "If Temp < Optimal, Reduce Score").
     * **`app.py` (The Face):** The User Interface, interactive map, and charts.
 
 ---
