@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from countries import WORLD_LOCATIONS  # Import the big list
+from geopy.geocoders import Nominatim
 
 
 # =========================================================
@@ -152,6 +153,23 @@ def get_plant_rules(plant_name):
     }
 
 
+def get_location_name(lat, lon):
+    """Returns 'Country' based on lat/lon using Geopy"""
+    try:
+        # Nominatim is the free OpenStreetMap geocoder
+        geolocator = Nominatim(user_agent="geoplant_dashboard")
+        location = geolocator.reverse(
+            (lat, lon), language="en", zoom=3
+        )  # zoom=3 gives country level
+        if location:
+            return location.address.split(",")[
+                -1
+            ].strip()  # Get the last part (Country)
+        return "Unknown Location"
+    except:
+        return "Unknown Location"
+
+
 # =========================================================
 # 5. PUBLIC API
 # =========================================================
@@ -170,12 +188,15 @@ def analyze_suitability(plant_name, lat, lon):
         return {"error": "Ocean/No Data"}
 
     score, status, reasons = calculate_score_logic(plant, climate)
+
+    loc_name = get_location_name(lat, lon)  # get country location
     return {
         "score": score,
         "status": status,
         "reasons": reasons,
         "climate": climate,
         "plant": plant,
+        "location_name": loc_name,
     }
 
 

@@ -177,6 +177,8 @@ if st.session_state.analysis_result:
         plant = res["plant"]
         climate = res["climate"]
 
+        location_name = res.get("location_name", "Unknown Location")
+
         st.divider()
         # --- NEW: KPI LAYER (Crop Info & Climate Summary) ---
         k1, k2 = st.columns(2)
@@ -209,7 +211,7 @@ if st.session_state.analysis_result:
             st.markdown(
                 f"""
             <div class="pop-card">
-                <h3>Location Climate Summary</h3>
+                <h3>Location Climate Summary: {location_name}</h3>
                 <div class="stat-container">
                     <div class="stat-item">
                         <div class="stat-label">Winter Low</div>
