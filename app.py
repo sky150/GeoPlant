@@ -126,7 +126,24 @@ with st.container():
         if not plant_list:
             st.error("Database Empty")
             st.stop()
-        selected_plant = st.selectbox("Plant:", plant_list)
+
+        # 1. Plant Selection
+        selected_plant = st.selectbox("Plant Species:", plant_list)
+
+        # 2. Water Source Selection (New)
+        selected_water = st.selectbox("Water Source:", ["Rainfed Only", "Irrigated"])
+
+        # 3. Planting Season Selection (New)
+        selected_season = st.selectbox(
+            "Planting Season:",
+            [
+                "Year Round",
+                "Spring (Mar-Jun)",
+                "Summer (Jun-Sep)",
+                "Autumn (Sep-Nov)",
+                "Winter (Dec-Mar)",
+            ],
+        )
 
     with c2:
         st.markdown("### 2. PICK LOCATION")
