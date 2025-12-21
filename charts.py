@@ -321,12 +321,6 @@ def create_top_countries_chart(top_countries_df, height=500):
     else:
         df["percentage"] = 0
 
-    # def create_top_countries_chart(top_countries_df, height=500):
-    #     if top_countries_df.empty:
-    #         return go.Figure()
-
-    #     df = top_countries_df.sort_values("avg_score", ascending=True)
-
     # --- FARBLOGIK ---
     # Wir weisen jedem Score direkt die Design-Farbe zu
     colors = []
@@ -346,15 +340,21 @@ def create_top_countries_chart(top_countries_df, height=500):
             orientation="h",
             # Dickere schwarze Linie (width=2) für den Comic-Look
             marker=dict(color=colors, line=dict(color=C_BLACK, width=2)),
-            text=[f"{x:.0f}" for x in df["avg_score"]],
-            textposition="outside",
+            text=[f"{x:.0f}%" for x in df["avg_score"]],
+            # textposition="outside",
             textfont=dict(family=FONT_MAIN, size=12, color=C_BLACK),
         )
     )
     fig.update_layout(
-        title={**TITLE_CONFIG, "text": "TOP REGIONS"},
+        title=dict(
+            text="<b>TOP REGIONS</b>",
+            x=0.45,
+            xanchor="right",
+            y=0.99,
+            font=dict(family="Montserrat", size=16, color="#333"),
+        ),
         height=height,
-        margin=dict(l=10, r=80, t=30, b=10),
+        margin=dict(r=15, t=30, b=10),
         xaxis=dict(showgrid=False, range=[0, 115], showticklabels=False),
         yaxis=dict(title="", tickfont=dict(family="Poppins", size=11, color="black")),
         paper_bgcolor="rgba(0,0,0,0)",

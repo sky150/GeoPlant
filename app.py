@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
+import streamlit.components.v1 as components
 import backend_api
 from charts import (
     create_radar_chart,
@@ -252,20 +253,53 @@ if st.session_state.analysis_result:
         # Removed the divider line between top charts and map section
 
         # --- ROW 2: MAP & TOP LIST ---
-        m1, m2 = st.columns([3, 1])
+        m1, m2 = st.columns([2.7, 1])
 
         if not st.session_state.regional_scan.empty:
             with m1:
-                st.markdown(
-                    '<div class="chart-title" style="text-align: left;">GLOBAL MAP</div>',
-                    unsafe_allow_html=True,
-                )
                 scan_df = st.session_state.regional_scan
 
-                # Karte initialisieren
+                # Karte initialisieren (No Labels)
                 m_global = folium.Map(
-                    location=[20, 0], zoom_start=2, tiles="CartoDB positron"
+                    location=[20, 0],
+                    zoom_start=2,
+                    tiles="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+                    attr="CartoDB",
                 )
+
+                # --- 1. INJECT TITLE (Floating Inside Card) ---
+                title_html = """
+                <div style="
+                    position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
+                    z-index: 1000; background-color: white; padding: 5px 15px;
+                    border: 2px solid black; border-radius: 10px;
+                    font-family: 'Montserrat', sans-serif; font-weight: 900;
+                    font-size: 16px; color: #333; box-shadow: 3px 3px 0px black;">
+                    GLOBAL MAP
+                </div>
+                """
+                m_global.get_root().html.add_child(folium.Element(title_html))
+
+                # --- 2. INJECT LEGEND (Floating Bottom Left) ---
+                legend_html = """
+                <div style="
+                    position: fixed; bottom: 20px; left: 20px; z-index: 1000;
+                    background-color: white; padding: 10px; border: 2px solid black;
+                    border-radius: 10px; font-family: 'Poppins', sans-serif;
+                    box-shadow: 3px 3px 0px black; font-size: 12px;">
+                    <div style="margin-bottom: 5px; font-weight: bold; text-align:center;">SUITABILITY</div>
+                    <div style="display:flex; align-items:center; margin-bottom:3px;">
+                        <span style="background:#BDD409; width:15px; height:15px; display:inline-block; border:1px solid black; margin-right:5px;"></span> High (>75)
+                    </div>
+                    <div style="display:flex; align-items:center; margin-bottom:3px;">
+                        <span style="background:#1F89D8; width:15px; height:15px; display:inline-block; border:1px solid black; margin-right:5px;"></span> Medium (75-45)
+                    </div>
+                    <div style="display:flex; align-items:center;">
+                        <span style="background:#E6A8D7; width:15px; height:15px; display:inline-block; border:1px solid black; margin-right:5px;"></span> Low (<45)
+                    </div>
+                </div>
+                """
+                m_global.get_root().html.add_child(folium.Element(legend_html))
 
                 # --- CUSTOM COLOR LOGIC ---
                 score_dict = scan_df.set_index("country")["score"].to_dict()
@@ -279,9 +313,9 @@ if st.session_state.analysis_result:
                         if score >= 75:
                             fill_color = "#BDD409"  # C_LIME
                         elif score >= 45:
-                            fill_color = "#d1d1d1"  # C_MED_BLUE
+                            fill_color = "#1F89D8"  # C_MED_BLUE
                         else:
-                            fill_color = "#d1d1d1"  # C_PINK
+                            fill_color = "#E6A8D7"  # C_PINK
 
                     return {
                         "fillColor": fill_color,
@@ -301,11 +335,17 @@ if st.session_state.analysis_result:
                     ),
                 ).add_to(m_global)
 
-                # (Optional) Einfache Legende als HTML darüber oder darunter,
-                # da GeoJson keine automatische Farblegende generiert.
+                map_html = m_global.get_root().render()
 
-                st_folium(m_global, height=500, use_container_width=True)
+                # This replacement forces the body inside the iframe to have 0 margin,
+                # so the map touches the card borders perfectly.
+                map_html = map_html.replace(
+                    "</head>",
+                    "<style>html, body {width: 100%; height: 100%; margin: 0; padding: 0;}</style></head>",
+                )
 
+                # Render with components.html (Height 500 matches the card layout)
+                components.html(map_html, height=525)
             with m2:
                 top = backend_api.get_top_countries(
                     selected_plant, st.session_state.regional_scan
