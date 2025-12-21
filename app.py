@@ -133,16 +133,8 @@ with st.container():
         # 2. Water Source Selection (New)
         selected_water = st.selectbox("Water Source:", ["Rainfed Only", "Irrigated"])
 
-        # 3. Planting Season Selection (New)
-        selected_season = st.selectbox(
-            "Planting Season:",
-            [
-                "Year Round",
-                "Spring (Mar-Jun)",
-                "Summer (Jun-Sep)",
-                "Autumn (Sep-Nov)",
-                "Winter (Dec-Mar)",
-            ],
+        selected_goal = st.selectbox(
+            "Yield Target:", ["Survival", "Max Yield (Strict)"]
         )
 
     with c2:
@@ -174,6 +166,7 @@ with st.container():
                 st.session_state.lat,
                 st.session_state.lon,
                 water_source=selected_water,
+                yield_goal=selected_goal,
             )
             st.session_state.analysis_result = res
 
@@ -309,7 +302,7 @@ if st.session_state.analysis_result:
                     background-color: white; padding: 10px; border: 2px solid black;
                     border-radius: 10px; font-family: 'Poppins', sans-serif;
                     box-shadow: 3px 3px 0px black; font-size: 12px;">
-                    <div style="margin-bottom: 5px; font-weight: bold; text-align:center;">SUITABILITY</div>
+                    <div style="margin-bottom: 5px; font-weight: bold; text-align:center;">SUITABILITY (%)</div>
                     <div style="display:flex; align-items:center; margin-bottom:3px;">
                         <span style="background:#BDD409; width:15px; height:15px; display:inline-block; border:1px solid black; margin-right:5px;"></span> High (>75)
                     </div>
@@ -373,6 +366,8 @@ if st.session_state.analysis_result:
                     selected_plant, st.session_state.regional_scan
                 )
                 st.plotly_chart(
-                    create_top_countries_chart(top, height=500),
+                    create_top_countries_chart(
+                        top, current_name=location_name, current_score=score, height=500
+                    ),
                     use_container_width=True,
                 )

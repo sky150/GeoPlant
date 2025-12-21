@@ -162,7 +162,13 @@ def create_circular_gauge(score, real_data=None, height=350):
     )
 
     fig.update_layout(
-        title={**TITLE_CONFIG, "text": "<b>SUITABILITY SCORE</b>"},
+        title=dict(
+            text="<b>SUITABILITY SCORE (%)</b>",
+            x=0.57,
+            xanchor="right",
+            y=0.99,
+            font=dict(family="Montserrat", size=16, color="#333", weight=900),
+        ),
         height=height,
         margin=dict(l=10, r=25, t=30, b=25),
         paper_bgcolor="rgba(0,0,0,0)",
@@ -308,43 +314,62 @@ def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
     return fig
 
 
-def create_top_countries_chart(top_countries_df, height=500):
+def create_top_countries_chart(
+    top_countries_df, current_name=None, current_score=None, height=500
+):
     """
-    Zeigt Top Countries als % vom Maximum (100% = bester Ort).
+    Shows Top Countries AND the user's selected location for context.
+    Uses standard color logic for all bars, but bolds the selected location name.
     """
-    if top_countries_df.empty:
+    if top_countries_df.empty and current_name is None:
         return go.Figure()
 
-    df = top_countries_df.sort_values("avg_score", ascending=True).copy()
+    df = top_countries_df.copy()
 
-    # Konvertiere zu Prozent vom Maximum
-    max_score = df["avg_score"].max()
-    if max_score > 0:
-        df["percentage"] = (df["avg_score"] / max_score) * 100
-    else:
-        df["percentage"] = 0
-
-    # --- FARBLOGIK ---
-    # Wir weisen jedem Score direkt die Design-Farbe zu
-    colors = []
-    for s in df["avg_score"]:
-        if s >= 75:
-            colors.append(C_LIME)  # Top: Lime Green
-        elif s >= 45:
-            colors.append(C_MED_BLUE)  # Mittel: Medium Blue
+    # 1. Add Current Location to the list
+    if current_name and current_score is not None:
+        # Avoid duplicates if current location is already in top 10
+        if current_name not in df["country"].values:
+            new_row = pd.DataFrame(
+                [{"country": current_name, "avg_score": current_score}]
+            )
+            df = pd.concat([df, new_row], ignore_index=True)
         else:
-            colors.append(C_PINK)  # Schlecht: Pink
+            # Update score just in case logic differed slightly
+            df.loc[df["country"] == current_name, "avg_score"] = current_score
+
+    # 2. Sort so best is at the top (bar charts usually read top-down)
+    df = df.sort_values("avg_score", ascending=True)
+
+    # 3. Apply Colors and Bold Logic
+    colors = []
+    labels = []
+
+    for country in df["country"]:
+        score = df.loc[df["country"] == country, "avg_score"].values[0]
+
+        # Standard Color Logic for ALL bars
+        if score >= 75:
+            colors.append(C_LIME)
+        elif score >= 45:
+            colors.append(C_MED_BLUE)
+        else:
+            colors.append(C_PINK)
+
+        # Highlight Logic: Bold Text Only
+        if country == current_name:
+            labels.append(f"<b>{country}</b>")  # Bold HTML tag
+        else:
+            labels.append(country)
 
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
-            y=df["country"],
+            y=labels,  # Use the list with the bold HTML
             x=df["avg_score"],
             orientation="h",
-            # Dickere schwarze Linie (width=2) für den Comic-Look
             marker=dict(color=colors, line=dict(color=C_BLACK, width=2)),
             text=[f"{x:.0f}%" for x in df["avg_score"]],
-            # textposition="outside",
             textfont=dict(family=FONT_MAIN, size=12, color=C_BLACK),
         )
     )
@@ -359,7 +384,7 @@ def create_top_countries_chart(top_countries_df, height=500):
         height=height,
         margin=dict(r=15, t=30, b=10),
         xaxis=dict(showgrid=False, range=[0, 115], showticklabels=False),
-        yaxis=dict(title="", tickfont=dict(family="Poppins", size=11, color="black")),
+        yaxis=dict(title="", tickfont=dict(family="Poppins", size=14, color="black")),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Poppins"},
         plot_bgcolor="rgba(0,0,0,0)",
