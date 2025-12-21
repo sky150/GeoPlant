@@ -125,11 +125,22 @@ Once the setup is done, the app starts automatically!
 
 ## 📂 Code Structure Explained
 
-* **`backend_api.py`**: The "Backend".
-    * It contains the SQL queries (`SELECT ST_Value...`).
-    * It performs unit conversion (Kelvin to Celsius).
-    * It contains the **Suitability Algorithm** (e.g., Checking if Winter Low < Plant Minimum).
-* **`app.py`**: The "Frontend".
-    * It uses `streamlit` to draw buttons and layouts.
-    * It uses `folium` for the interactive map.
-    * It calls `backend_api.analyze_suitability()` to get the answers.
+### 1. `backend_api.py` 
+This is the Logic Layer. It has zero UI code.
+* **Database Interface:** Connects to PostGIS and runs the `SELECT ST_Value...` queries to extract raster data for a specific lat/lon.
+* **Data Cleaning:** Converts raw pixel values (Kelvin/Integers) into human-readable units (Celsius/mm).
+* **The Algorithm:** Contains `calculate_score_logic()`, which applies the FAO biological rules to the climate data. It decides if a plant "Survives" or "Thrives."
+
+### 2. `app-frontend.py` 
+This is the Main Application entry point.
+* **Streamlit Layout:** Defines the columns, dropdowns, and page structure.
+* **State Management:** Remembers your selected location (`st.session_state`) so it doesn't reset when you change filters.
+* **Interactive Map:** Renders the Leaflet map using `folium` to let users pick coordinates.
+* **Orchestrator:** It calls the Backend to get data, then calls the Charts module to visualize it.
+
+### 3. `charts_frontend.py` 
+This module handles all Data Visualization using **Plotly**.
+* **`create_radar_chart`:** Draws the pink/blue shapes to compare Plant Needs vs. Location Climate.
+* **`create_circular_gauge`:** Renders the big ring showing the final 0-100 score.
+* **`create_diverging_bar_chart`:** Calculates the +/- percentage deviations (e.g., "Too Cold by 10%").
+* **`create_top_countries_chart`:** Generates the global ranking list and highlights the user's selected country.
