@@ -14,55 +14,66 @@ C_BLACK = "#000000"
 C_GREY = "#e6e6e6"
 FONT_MAIN = "Montserrat, Arial Black, sans-serif"
 
+TITLE_CONFIG = dict(
+    x=0.5,
+    xanchor="right",
+    y=0.99,
+    font=dict(family="Montserrat", size=16, color="#333", weight=900),
+)
+
 
 # --------------------------------------------------------------------------
 # LOGIC: CONVERT REAL DATA TO RELATIVE PERCENTAGES
 # --------------------------------------------------------------------------
-def _convert_real_data_to_df(real_data):
+def _normalize(val, min_v, max_v):
+    if val is None:
+        return 50
+    return max(0, min(100, (val - min_v) / (max_v - min_v) * 100))
+
+
+def _convert_real_data_to_df(real_data, override_water_source=None):
     """
-    Berechnet die lokalen Werte als prozentuales Verhältnis zum Pflanzen-Optimum.
-    Pflanzen-Optimum ist dabei IMMER 100 (Referenz).
+    Helper to convert raw data into % match for charts.
+    Allows overriding water_source to simulate 'Natural' vs 'Irrigated' states.
     """
     climate = real_data["climate"]
     plant = real_data["plant"]
 
-    # 1. Bestimme das "Ideal" der Pflanze (Mittelwert aus Min/Max)
+    # Use override if provided, else use actual selection
+    water_source = (
+        override_water_source
+        if override_water_source
+        else real_data.get("water_source", "Rainfed Only")
+    )
+
+    # 1. Ideals
     p_temp_opt = (plant["Min_Temp"] + plant["Max_Temp"]) / 2
     p_rain_opt = (plant["Min_Rain"] + plant["Max_Rain"]) / 2
     p_ph_opt = (plant["Min_pH"] + plant["Max_pH"]) / 2
-
-    # Defaults falls nicht vorhanden
     p_sun_opt = plant.get("Sun_Need", 80)
     p_hum_opt = plant.get("Ideal_Hum", 50)
 
-    # 2. Hole die lokalen Geodaten
+    # 2. Local Data
     l_temp = climate["mean_temp"]
-    l_rain = climate["rain"]
+
+    # IRRIGATION LOGIC: If Irrigated, pretend rain is optimal
+    if water_source == "Irrigated":
+        l_rain = p_rain_opt
+    else:
+        l_rain = climate["rain"]
+
     l_ph = climate.get("ph", 6.5)
     l_sun = climate.get("sun", 80)
     l_hum = climate.get("humidity", 60)
 
-    # 3. Hilfsfunktion für %-Verhältnis
+    # 3. Ratio Calculation
     def calculate_ratio(local, optimum, is_interval=False):
-        # Schutz vor Division durch Null
         if optimum == 0:
-            # Fallback: Wenn Optimum 0 ist, nutzen wir Differenz + 100
             return 100 + (local * 10)
-
-        if is_interval:
-            # OPTIONAL: Bei Temperatur/pH ist reines Verhältnis (10°C / 20°C = 50%)
-            # mathematisch schwierig, aber für Visualisierung oft gewünscht.
-            # Wenn du lieber Abweichung willst (z.B. 1 Grad daneben = 5% Abzug),
-            # müsste man das hier ändern.
-            # Hier: Wir nutzen das reine Verhältnis wie angefordert.
-            # Achtung: Wenn Optimum sehr klein (z.B. 2°C), explodieren %-Werte bei kleinen Abweichungen.
-            pass
-
         ratio = (local / optimum) * 100
         return ratio
 
-    # 4. Daten zusammenstellen
-    # Struktur: [Label, Pflanzen-Soll (immer 100), Lokal-Ist (% vom Soll)]
+    # 4. Compile
     data = [
         ("Temp", 100, calculate_ratio(l_temp, p_temp_opt, is_interval=True)),
         ("Rain", 100, calculate_ratio(l_rain, p_rain_opt)),
@@ -72,9 +83,12 @@ def _convert_real_data_to_df(real_data):
     ]
 
     df = pd.DataFrame(data, columns=["condition", "plant_optimum", "local_value"])
-
-    # Difference für das Bar Chart (Abweichung von 100%)
     df["difference"] = df["local_value"] - 100
+
+    # Mark Rain as "Artificial" if irrigated for coloring later
+    df["is_artificial"] = False
+    if water_source == "Irrigated":
+        df.loc[df["condition"] == "Rain", "is_artificial"] = True
 
     return df
 
@@ -83,24 +97,38 @@ def _convert_real_data_to_df(real_data):
 # CHART GENERATORS
 # --------------------------------------------------------------------------
 
+
 def create_circular_gauge(score, real_data=None, height=350):
     """
     Modern Segmented Block Gauge showing REAL DATA METRICS at the top.
     """
     fig = go.Figure()
 
-    # --- 1. DETERMINE COLOR ---
+    # Get bonus
+    bonus = real_data.get("bonus", 0) if real_data else 0
+    base_score = score - bonus
+
+    # 1. Color Logic
     if score >= 80:
-        active_color = "#2ECC71"  # Green
+        active_color = C_LIME
     elif score >= 50:
         active_color = C_YELLOW
     else:
-        active_color = "#E74C3C"  # Red
+        active_color = C_PINK
 
-    # --- 2. BUILD SEGMENTS (Visuals) ---
+    # 2. Segments
     total_segments = 40
-    lit_segments = int(score / (100 / total_segments))
-    colors = [active_color] * lit_segments + [C_GREY] * (total_segments - lit_segments)
+    # Segments for the "Natural" score
+    base_lit = int(base_score / (100 / total_segments))
+    # Segments for the "Bonus" (Irrigation)
+    bonus_lit = int(bonus / (100 / total_segments))
+
+    # Construct color array: [Base Color] + [Blue Bonus] + [Grey]
+    colors = (
+        [active_color] * base_lit
+        + [C_MED_BLUE] * bonus_lit
+        + [C_GREY] * (total_segments - base_lit - bonus_lit)
+    )
 
     fig.add_trace(
         go.Pie(
@@ -110,7 +138,7 @@ def create_circular_gauge(score, real_data=None, height=350):
             direction="clockwise",
             textinfo="none",
             marker=dict(colors=colors, line=dict(color="white", width=3)),
-            domain={"x": [0, 1], "y": [0, 0.85]},
+            domain={"x": [0, 1], "y": [0, 1]},
             hoverinfo="skip",
         )
     )
@@ -118,7 +146,7 @@ def create_circular_gauge(score, real_data=None, height=350):
     # --- 3. CENTER TEXT (Score) ---
     fig.add_annotation(
         x=0.5,
-        y=0.425,
+        y=0.55,
         text=f"{int(score)}",
         showarrow=False,
         font=dict(size=70, family=FONT_MAIN, color=C_DARK_BLUE),
@@ -127,43 +155,20 @@ def create_circular_gauge(score, real_data=None, height=350):
     # 4. Suitability Label
     fig.add_annotation(
         x=0.5,
-        y=0.20,
+        y=0.30,
         text="SUITABILITY",
         showarrow=False,
         font=dict(size=14, family="Poppins", color="gray", weight="bold"),
     )
 
-    # 5. Top Metrics (Temp, Rain, pH) - Zeigt absolute Werte an
-    if real_data:
-        clim = real_data["climate"]
-
-        val_temp = f"{clim['min_temp']}°"
-        val_rain = f"{clim['rain']}mm"
-        val_ph = f"{clim['ph']}"
-
-        metrics = [
-            (val_temp, "MIN TEMP", 0.15),
-            (val_rain, "RAIN", 0.5),
-            (val_ph, "pH", 0.85),
-        ]
-
-        for val, label, x_pos in metrics:
-            fig.add_annotation(
-                x=x_pos,
-                y=1.0,
-                text=str(val),
-                showarrow=False,
-                font=dict(size=22, family=FONT_MAIN, color=C_BLACK),
-            )
-            fig.add_annotation(
-                x=x_pos,
-                y=0.90,
-                text=label,
-                showarrow=False,
-                font=dict(size=11, family="Poppins", color="gray"),
-            )
-
     fig.update_layout(
+        title=dict(
+            text="<b>SUITABILITY SCORE (%)</b>",
+            x=0.57,
+            xanchor="right",
+            y=0.99,
+            font=dict(family="Montserrat", size=16, color="#333", weight=900),
+        ),
         height=height,
         margin=dict(l=10, r=25, t=30, b=25),
         paper_bgcolor="rgba(0,0,0,0)",
@@ -176,54 +181,82 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
     if not real_data:
         return go.Figure()
 
-    df = _convert_real_data_to_df(real_data)
+    # 1. Get Natural Data (Always Rainfed) for the Pink Base
+    df_natural = _convert_real_data_to_df(
+        real_data, override_water_source="Rainfed Only"
+    )
 
-    # Dynamische Skalierung: Wenn ein Wert 150% ist, muss der Chart bis mind. 150 gehen
-    max_val = df["local_value"].max()
-    chart_range = [0, max(140, max_val + 10)] # Mindestens bis 140, sonst dynamisch
+    # 2. Get Actual Data (Could be Irrigated) for the Blue Overlay
+    is_irrigated = real_data.get("water_source") == "Irrigated"
+    df_actual = _convert_real_data_to_df(real_data) if is_irrigated else df_natural
+
+    max_val = max(df_natural["local_value"].max(), df_actual["local_value"].max())
+    chart_range = [0, max(140, max_val + 10)]
 
     fig = go.Figure()
 
-    # 1. Die Pflanze (Referenz = 100%)
+    # --- TRACE 1: OPTIMUM (Dotted Line) ---
     fig.add_trace(
         go.Scatterpolar(
-            r=df["plant_optimum"].tolist() + [df["plant_optimum"].iloc[0]],
-            theta=df["condition"].tolist() + [df["condition"].iloc[0]],
+            r=df_natural["plant_optimum"].tolist()
+            + [df_natural["plant_optimum"].iloc[0]],
+            theta=df_natural["condition"].tolist() + [df_natural["condition"].iloc[0]],
             fill="toself",
             name=f"{plant_name} (Optimum)",
-            line=dict(color=C_BLACK, width=2, dash='dot'),
-            fillcolor="rgba(200, 200, 200, 0.2)", # Dezentes Grau für Basis
-            hoverinfo="skip"
+            line=dict(color=C_BLACK, width=2, dash="dot"),
+            fillcolor="rgba(200, 200, 200, 0.1)",
+            hoverinfo="skip",
         )
     )
 
-    # 2. Der Ort (Variabel)
+    # --- TRACE 2: NATURAL CLIMATE (Pink) ---
     fig.add_trace(
         go.Scatterpolar(
-            r=df["local_value"].tolist() + [df["local_value"].iloc[0]],
-            theta=df["condition"].tolist() + [df["condition"].iloc[0]],
+            r=df_natural["local_value"].tolist() + [df_natural["local_value"].iloc[0]],
+            theta=df_natural["condition"].tolist() + [df_natural["condition"].iloc[0]],
             fill="toself",
-            name="Location Data",
+            name="Natural Climate",
             line=dict(color=C_PINK, width=3),
-            fillcolor="rgba(241, 92, 227, 0.4)",
+            fillcolor="rgba(241, 92, 227, 0.3)",  # Pink with opacity
         )
     )
 
+    # --- TRACE 3: IRRIGATED (Blue) - Only if selected ---
+    if is_irrigated:
+        fig.add_trace(
+            go.Scatterpolar(
+                r=df_actual["local_value"].tolist()
+                + [df_actual["local_value"].iloc[0]],
+                theta=df_actual["condition"].tolist()
+                + [df_actual["condition"].iloc[0]],
+                fill="toself",
+                name="With Irrigation",
+                line=dict(color=C_MED_BLUE, width=3),
+                fillcolor="rgba(31, 137, 216, 0.2)",  # Blue with lower opacity
+            )
+        )
+
     fig.update_layout(
+        title=dict(
+            text="<b>CONDITIONS</b>",
+            x=0.32,
+            xanchor="right",
+            y=0.99,
+            font=dict(family="Montserrat", size=16, color="#333"),
+        ),
         polar=dict(
             radialaxis=dict(visible=True, range=chart_range, tickfont=dict(size=8)),
             angularaxis=dict(tickfont=dict(size=10)),
         ),
         showlegend=True,
-        legend=dict(
-            orientation="h", y=-0.15, font=dict(size=10)
-        ),
+        legend=dict(orientation="h", y=-0.15, font=dict(size=10)),
         height=height,
-        margin=dict(t=10, b=30, l=35, r=35),
+        margin=dict(t=30, b=10, l=35, r=35),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Poppins"},
     )
     return fig
+
 
 def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
     if not real_data:
@@ -231,12 +264,20 @@ def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
 
     df = _convert_real_data_to_df(real_data)
 
-    # WICHTIG: Sortierung nach fester Reihenfolge erzwingen
     order = ["Temp", "Hum", "Rain", "Sun", "pH"]
     df["condition"] = pd.Categorical(df["condition"], categories=order, ordered=True)
-    df = df.sort_values("condition", ascending=False)  # Reversed für horizontale Bars
+    df = df.sort_values("condition", ascending=False)
 
-    colors = [C_MED_BLUE if x < 0 else C_PINK for x in df["difference"]]
+    # Colors: Blue if negative, Pink if positive.
+    # SPECIAL: If 'Rain' is artificial (Irrigated), make it the Bonus Blue.
+    colors = []
+    for _, row in df.iterrows():
+        if row["is_artificial"] and row["condition"] == "Rain":
+            colors.append(C_MED_BLUE)  # Artificial Fix (Blue)
+        elif row["difference"] < 0:
+            colors.append(C_MED_BLUE)
+        else:
+            colors.append(C_PINK)
 
     fig = go.Figure()
     fig.add_trace(
@@ -254,114 +295,98 @@ def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
     limit = max(50, max_diff + 20)
 
     fig.update_layout(
+        title=dict(
+            text="<b>DEVIATION</b>",
+            x=0.3,
+            xanchor="right",
+            y=0.99,
+            font=dict(family="Montserrat", size=16, color="#333"),
+        ),
         height=height,
-        margin=dict(t=20, b=20, l=10, r=40),
+        margin=dict(t=30, b=20, l=10, r=40),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Poppins"},
-        xaxis=dict(
-            zeroline=True,
-            showgrid=True,
-            range=[-limit, limit],
+        xaxis=dict(zeroline=True, showgrid=True, range=[-limit, limit]),
+        yaxis=dict(
+            tickfont=dict(size=11), categoryorder="array", categoryarray=order[::-1]
         ),
-        yaxis=dict(tickfont=dict(size=11), categoryorder='array', categoryarray=order[::-1]),
     )
     return fig
 
-# #def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
-#     if not real_data:
-#         return go.Figure()
-#     df = _convert_real_data_to_df(real_data)
 
-#     # Difference ist jetzt: (Lokal% - 100%)
-#     # < 0 bedeutet "Zu wenig" (Unterversorgung)
-#     # > 0 bedeutet "Zu viel" (Überversorgung)
-
-#     colors = [C_MED_BLUE if x < 0 else C_PINK for x in df["difference"]]
-
-#     fig = go.Figure()
-#     fig.add_trace(
-#         go.Bar(
-#             y=df["condition"],
-#             x=df["difference"],
-#             orientation="h",
-#             marker=dict(color=colors, line=dict(color=C_BLACK, width=1)),
-#             text=[f"{x:+.0f}%" for x in df["difference"]], # Zeigt "+20%" oder "-10%"
-#             textposition="outside",
-#         )
-#     )
-
-#     # Dynamische X-Achse, damit Text nicht abgeschnitten wird
-#     max_diff = max(abs(df["difference"].min()), abs(df["difference"].max()))
-#     limit = max(50, max_diff + 20)
-
-#     fig.update_layout(
-#         height=height,
-#         margin=dict(t=20, b=20, l=10, r=40),
-#         paper_bgcolor="rgba(0,0,0,0)",
-#         font={"family": "Poppins"},
-#         xaxis=dict(
-#             zeroline=True,
-#             showgrid=True,
-#             range=[-limit, limit],
-#             title="Deviation from Optimum (%)"
-#         ),
-#         yaxis=dict(tickfont=dict(size=11)),
-#     )
-#     return fig
-
-def create_top_countries_chart(top_countries_df, height=500):
+def create_top_countries_chart(
+    top_countries_df, current_name=None, current_score=None, height=500
+):
     """
-    Zeigt Top Countries als % vom Maximum (100% = bester Ort).
+    Shows Top Countries AND the user's selected location for context.
+    Uses standard color logic for all bars, but bolds the selected location name.
     """
-    if top_countries_df.empty:
+    if top_countries_df.empty and current_name is None:
         return go.Figure()
 
-    df = top_countries_df.sort_values("avg_score", ascending=True).copy()
+    df = top_countries_df.copy()
 
-    # Konvertiere zu Prozent vom Maximum
-    max_score = df["avg_score"].max()
-    if max_score > 0:
-        df["percentage"] = (df["avg_score"] / max_score) * 100
-    else:
-        df["percentage"] = 0
-
-# def create_top_countries_chart(top_countries_df, height=500):
-#     if top_countries_df.empty:
-#         return go.Figure()
-
-#     df = top_countries_df.sort_values("avg_score", ascending=True)
-
-    # --- FARBLOGIK ---
-    # Wir weisen jedem Score direkt die Design-Farbe zu
-    colors = []
-    for s in df["avg_score"]:
-        if s >= 75:
-            colors.append(C_LIME)      # Top: Lime Green
-        elif s >= 45:
-            colors.append(C_MED_BLUE)  # Mittel: Medium Blue
+    # 1. Add Current Location to the list
+    if current_name and current_score is not None:
+        # Avoid duplicates if current location is already in top 10
+        if current_name not in df["country"].values:
+            new_row = pd.DataFrame(
+                [{"country": current_name, "avg_score": current_score}]
+            )
+            df = pd.concat([df, new_row], ignore_index=True)
         else:
-            colors.append(C_PINK)      # Schlecht: Pink
+            # Update score just in case logic differed slightly
+            df.loc[df["country"] == current_name, "avg_score"] = current_score
+
+    # 2. Sort so best is at the top (bar charts usually read top-down)
+    df = df.sort_values("avg_score", ascending=True)
+
+    # 3. Apply Colors and Bold Logic
+    colors = []
+    labels = []
+
+    for country in df["country"]:
+        score = df.loc[df["country"] == country, "avg_score"].values[0]
+
+        # Standard Color Logic for ALL bars
+        if score >= 75:
+            colors.append(C_LIME)
+        elif score >= 45:
+            colors.append(C_MED_BLUE)
+        else:
+            colors.append(C_PINK)
+
+        # Highlight Logic: Bold Text Only
+        if country == current_name:
+            labels.append(f"<b>{country}</b>")  # Bold HTML tag
+        else:
+            labels.append(country)
 
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
-            y=df["country"],
+            y=labels,  # Use the list with the bold HTML
             x=df["avg_score"],
             orientation="h",
-            # Dickere schwarze Linie (width=2) für den Comic-Look
             marker=dict(color=colors, line=dict(color=C_BLACK, width=2)),
-            text=[f"{x:.0f}" for x in df["avg_score"]],
-            textposition="outside",
-            textfont=dict(family=FONT_MAIN, size=12, color=C_BLACK)
+            text=[f"{x:.0f}%" for x in df["avg_score"]],
+            textfont=dict(family=FONT_MAIN, size=12, color=C_BLACK),
         )
     )
     fig.update_layout(
+        title=dict(
+            text="<b>TOP REGIONS</b>",
+            x=0.45,
+            xanchor="right",
+            y=0.99,
+            font=dict(family="Montserrat", size=16, color="#333"),
+        ),
         height=height,
-        margin=dict(l=10, r=80, t=10, b=10),
+        margin=dict(r=15, t=30, b=10),
         xaxis=dict(showgrid=False, range=[0, 115], showticklabels=False),
-        yaxis=dict(title="", tickfont=dict(family="Poppins", size=11, color="black")),
+        yaxis=dict(title="", tickfont=dict(family="Poppins", size=14, color="black")),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Poppins"},
-        plot_bgcolor="rgba(0,0,0,0)"
+        plot_bgcolor="rgba(0,0,0,0)",
     )
     return fig

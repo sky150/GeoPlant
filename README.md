@@ -1,6 +1,13 @@
-# 🌍 GeoPlant: Smart Crop Suitability Engine
+# 🌍 GeoPlant: Global Crop Suitability Engine
 
-**GeoPlant** is a Precision Agriculture dashboard that helps farmers and gardeners decide **where** to plant specific crops. It uses high-resolution climate rasters (CHELSA V2) and biological thresholds to calculate a "Survival Score" for any coordinate in Europe.
+**GeoPlant** is a Precision Agriculture dashboard that helps farmers and researchers decide **where** to plant specific crops. It uses high-resolution climate rasters (CHELSA V2) and biological thresholds (FAO EcoCrop) to calculate a "Suitability Score" for any coordinate on Earth.
+
+---
+
+## 📚 Documentation
+* **[Data Sources & Science](doc/data_sources.md):** Deep dive into CHELSA Climate Data and FAO EcoCrop logic.
+* **[Visualization Guide](doc/visualization_guide.md):** How to read the Radar, Gauge, and Deviation charts.
+* **[User Manual](doc/user_manual.md):** How to use filters like "Irrigation" and "Yield Targets."
 
 ---
 
@@ -11,10 +18,10 @@ The app follows a **Service-Oriented Architecture** running on Docker:
 1.  **Database Container (`geoplant_db`):**
     * Runs PostgreSQL + PostGIS.
     * Stores 50GB of Raster Data (Temperature, Rain, Drought metrics).
-    * Stores the Plant Rules (CSV converted to SQL).
+    * Stores the Plant Rules (FAO EcoCrop Data).
 2.  **App Container (`geoplant_app`):**
     * Runs Python Streamlit.
-    * **`backend_api.py` (The Brain):** Handles SQL connections and biological logic (e.g., "If Temp < 0, Plant Dies").
+    * **`backend_api.py` (The Brain):** Handles SQL connections and biological logic (e.g., "If Temp < Optimal, Reduce Score").
     * **`app.py` (The Face):** The User Interface, interactive map, and charts.
 
 ---
@@ -118,11 +125,22 @@ Once the setup is done, the app starts automatically!
 
 ## 📂 Code Structure Explained
 
-* **`backend_api.py`**: The "Backend".
-    * It contains the SQL queries (`SELECT ST_Value...`).
-    * It performs unit conversion (Kelvin to Celsius).
-    * It contains the **Suitability Algorithm** (e.g., Checking if Winter Low < Plant Minimum).
-* **`app.py`**: The "Frontend".
-    * It uses `streamlit` to draw buttons and layouts.
-    * It uses `folium` for the interactive map.
-    * It calls `backend_api.analyze_suitability()` to get the answers.
+### 1. `backend_api.py` 
+This is the Logic Layer. It has zero UI code.
+* **Database Interface:** Connects to PostGIS and runs the `SELECT ST_Value...` queries to extract raster data for a specific lat/lon.
+* **Data Cleaning:** Converts raw pixel values (Kelvin/Integers) into human-readable units (Celsius/mm).
+* **The Algorithm:** Contains `calculate_score_logic()`, which applies the FAO biological rules to the climate data. It decides if a plant "Survives" or "Thrives."
+
+### 2. `app-frontend.py` 
+This is the Main Application entry point.
+* **Streamlit Layout:** Defines the columns, dropdowns, and page structure.
+* **State Management:** Remembers your selected location (`st.session_state`) so it doesn't reset when you change filters.
+* **Interactive Map:** Renders the Leaflet map using `folium` to let users pick coordinates.
+* **Orchestrator:** It calls the Backend to get data, then calls the Charts module to visualize it.
+
+### 3. `charts_frontend.py` 
+This module handles all Data Visualization using **Plotly**.
+* **`create_radar_chart`:** Draws the pink/blue shapes to compare Plant Needs vs. Location Climate.
+* **`create_circular_gauge`:** Renders the big ring showing the final 0-100 score.
+* **`create_diverging_bar_chart`:** Calculates the +/- percentage deviations (e.g., "Too Cold by 10%").
+* **`create_top_countries_chart`:** Generates the global ranking list and highlights the user's selected country.

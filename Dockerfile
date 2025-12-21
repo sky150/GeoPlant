@@ -17,7 +17,7 @@ WORKDIR /app
 
 # Install Python libraries
 # ADDED: folium and streamlit-folium
-RUN pip install pandas sqlalchemy psycopg2-binary streamlit plotly folium streamlit-folium
+RUN pip install pandas sqlalchemy psycopg2-binary streamlit plotly folium streamlit-folium geopy
 
 # Copy all files from your laptop to the container
 COPY . .

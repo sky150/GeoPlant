@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
+import streamlit.components.v1 as components
 import backend_api
 from charts import (
     create_radar_chart,
@@ -44,6 +45,31 @@ iframe {
     padding: 5px;
 }
 
+/* 3. CARD STYLING */
+.pop-card {
+    background: white;
+    border: 3px solid black;
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: 5px 5px 0px 0px #000000;
+    margin-bottom: 20px;
+}
+
+.pop-card h3 {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    color: #333;
+    font-size: 1rem;
+    text-transform: uppercase;
+}
+
+/* 4. STATS LAYOUT (New classes for the cards) */
+.stat-container { display: flex; justify-content: space-between; text-align: left; gap: 25px; }
+.stat-item { width: 32%; }
+.stat-label { font-size: 0.8rem; color: #666; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+.stat-value { font-size: 1.1rem; font-weight: 700; color: black; }
+.stat-sub { font-size: 0.75rem; color: #999; margin-top: 2px; }
+
 .stButton > button { background: var(--c-pink); color: white; border: 3px solid black; font-weight: 900; box-shadow: 4px 4px 0px 0px #000000; text-transform: uppercase; }
 .stButton > button:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0px 0px #000000; color:white; border-color:black; }
 
@@ -51,9 +77,11 @@ iframe {
 .chart-title {
     text-align: center;
     font-family: 'Montserrat', sans-serif;
-    font-weight: 700;
+    font-weight: 900;
     margin-bottom: 10px;
     text-transform: uppercase;
+    color: #333;
+
 }
 </style>
 """,
@@ -98,7 +126,16 @@ with st.container():
         if not plant_list:
             st.error("Database Empty")
             st.stop()
-        selected_plant = st.selectbox("Plant:", plant_list)
+
+        # 1. Plant Selection
+        selected_plant = st.selectbox("Plant Species:", plant_list)
+
+        # 2. Water Source Selection (New)
+        selected_water = st.selectbox("Water Source:", ["Rainfed Only", "Irrigated"])
+
+        selected_goal = st.selectbox(
+            "Yield Target:", ["Survival", "Max Yield (Strict)"]
+        )
 
     with c2:
         st.markdown("### 2. PICK LOCATION")
@@ -125,7 +162,11 @@ with st.container():
         with st.spinner("Scanning 190+ Countries..."):
             # 1. Analyze Point
             res = backend_api.analyze_suitability(
-                selected_plant, st.session_state.lat, st.session_state.lon
+                selected_plant,
+                st.session_state.lat,
+                st.session_state.lon,
+                water_source=selected_water,
+                yield_goal=selected_goal,
             )
             st.session_state.analysis_result = res
 
@@ -146,33 +187,79 @@ if st.session_state.analysis_result:
         st.error(res["error"])
     else:
         score = res["score"]
+        plant = res["plant"]
+        climate = res["climate"]
+
+        location_name = res.get("location_name", "Unknown Location")
+
         st.divider()
+        # --- NEW: KPI LAYER (Crop Info & Climate Summary) ---
+        k1, k2 = st.columns(2)
+
+        with k1:
+            st.markdown(
+                f"""
+            <div class="pop-card">
+                <h3>Crop Requirements: {plant['name']}</h3>
+                <div class="stat-container">
+                    <div class="stat-item">
+                        <div class="stat-label">Optimal Temp</div>
+                        <div class="stat-value">{plant['Min_Temp']}°C to {plant['Max_Temp']}°C</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Water Demand</div>
+                        <div class="stat-value">{plant['Min_Rain']} - {plant['Max_Rain']} mm</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Soil pH</div>
+                        <div class="stat-value">{plant['Min_pH']} - {plant['Max_pH']}</div>
+                    </div>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+        with k2:
+            st.markdown(
+                f"""
+            <div class="pop-card">
+                <h3>Location Climate Summary: {location_name}</h3>
+                <div class="stat-container">
+                    <div class="stat-item">
+                        <div class="stat-label">Winter Low</div>
+                        <div class="stat-value">{climate['min_temp']}°C</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Summer High</div>
+                        <div class="stat-value">{climate['max_temp']}°C</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Annual Rain</div>
+                        <div class="stat-value">{climate['rain']} mm</div>
+                    </div>
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
 
         # --- ROW 1: CHARTS (3 Cols) ---
         c1, c2, c3 = st.columns([1, 1, 1])
 
         with c1:
-            st.markdown(
-                '<div class="chart-title">SUITABILITY SCORE</div>', unsafe_allow_html=True
-            )
             st.plotly_chart(
                 create_circular_gauge(score, real_data=res, height=320),
                 use_container_width=True,
             )
 
         with c2:
-            st.markdown(
-                '<div class="chart-title">CONDITIONS</div>', unsafe_allow_html=True
-            )
             st.plotly_chart(
                 create_radar_chart(selected_plant, "Loc", res, height=320),
                 use_container_width=True,
             )
 
         with c3:
-            st.markdown(
-                '<div class="chart-title">DEVIATION</div>', unsafe_allow_html=True
-            )
             st.plotly_chart(
                 create_diverging_bar_chart(selected_plant, "Loc", res, height=320),
                 use_container_width=True,
@@ -180,75 +267,107 @@ if st.session_state.analysis_result:
 
         # Removed the divider line between top charts and map section
 
-
         # --- ROW 2: MAP & TOP LIST ---
-        m1, m2 = st.columns([3, 1])
+        m1, m2 = st.columns([2.7, 1])
 
         if not st.session_state.regional_scan.empty:
             with m1:
-                st.markdown(
-                    '<div class="chart-title" style="text-align: left;">GLOBAL MAP</div>',
-                    unsafe_allow_html=True,
-                )
                 scan_df = st.session_state.regional_scan
 
-                # Karte initialisieren
+                # Karte initialisieren (No Labels)
                 m_global = folium.Map(
-                    location=[20, 0], zoom_start=2, tiles="CartoDB positron"
+                    location=[20, 0],
+                    zoom_start=2,
+                    tiles="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+                    attr="CartoDB",
                 )
 
+                # --- 1. INJECT TITLE (Floating Inside Card) ---
+                title_html = """
+                <div style="
+                    position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
+                    z-index: 1000; background-color: white; padding: 5px 15px;
+                    border: 2px solid black; border-radius: 10px;
+                    font-family: 'Montserrat', sans-serif; font-weight: 900;
+                    font-size: 16px; color: #333; box-shadow: 3px 3px 0px black;">
+                    GLOBAL MAP
+                </div>
+                """
+                m_global.get_root().html.add_child(folium.Element(title_html))
+
+                # --- 2. INJECT LEGEND (Floating Bottom Left) ---
+                legend_html = """
+                <div style="
+                    position: fixed; bottom: 20px; left: 20px; z-index: 1000;
+                    background-color: white; padding: 10px; border: 2px solid black;
+                    border-radius: 10px; font-family: 'Poppins', sans-serif;
+                    box-shadow: 3px 3px 0px black; font-size: 12px;">
+                    <div style="margin-bottom: 5px; font-weight: bold; text-align:center;">SUITABILITY (%)</div>
+                    <div style="display:flex; align-items:center; margin-bottom:3px;">
+                        <span style="background:#BDD409; width:15px; height:15px; display:inline-block; border:1px solid black; margin-right:5px;"></span> High (>75)
+                    </div>
+                    <div style="display:flex; align-items:center; margin-bottom:3px;">
+                        <span style="background:#1F89D8; width:15px; height:15px; display:inline-block; border:1px solid black; margin-right:5px;"></span> Medium (75-45)
+                    </div>
+                    <div style="display:flex; align-items:center;">
+                        <span style="background:#E6A8D7; width:15px; height:15px; display:inline-block; border:1px solid black; margin-right:5px;"></span> Low (<45)
+                    </div>
+                </div>
+                """
+                m_global.get_root().html.add_child(folium.Element(legend_html))
+
                 # --- CUSTOM COLOR LOGIC ---
-                # 1. Dictionary für schnellen Zugriff: {LandName: Score}
-                score_dict = scan_df.set_index('country')['score'].to_dict()
+                score_dict = scan_df.set_index("country")["score"].to_dict()
 
-                # 2. Style Funktion definieren (Harte Farbgrenzen für Pop-Art Look)
                 def style_function(feature):
-                    country_name = feature['properties']['name']
+                    country_name = feature["properties"]["name"]
                     score = score_dict.get(country_name, None)
-
-                    # Default (Keine Daten): Grau
                     fill_color = "#f0f0f0"
 
                     if score is not None:
                         if score >= 75:
                             fill_color = "#BDD409"  # C_LIME
                         elif score >= 45:
-                            fill_color = "#d1d1d1"  # C_MED_BLUE
+                            fill_color = "#1F89D8"  # C_MED_BLUE
                         else:
-                            fill_color = "#d1d1d1"  # C_PINK
+                            fill_color = "#E6A8D7"  # C_PINK
 
                     return {
-                        'fillColor': fill_color,
-                        'color': 'black',       # Schwarze Landesgrenzen
-                        'weight': 1,            # Dünne Linie
-                        'fillOpacity': 0.8
+                        "fillColor": fill_color,
+                        "color": "black",
+                        "weight": 1,
+                        "fillOpacity": 0.8,
                     }
 
-                # 3. GeoJson Layer hinzufügen (statt Standard Choropleth)
                 folium.GeoJson(
                     "https://raw.githubusercontent.com/python-visualization/folium/master/examples/data/world-countries.json",
                     name="Suitability",
                     style_function=style_function,
                     tooltip=folium.GeoJsonTooltip(
-                        fields=['name'],
-                        aliases=['Country:'],
-                        style="font-family: Poppins; font-size: 14px;"
-                    )
+                        fields=["name"],
+                        aliases=["Country:"],
+                        style="font-family: Poppins; font-size: 14px;",
+                    ),
                 ).add_to(m_global)
 
-                # (Optional) Einfache Legende als HTML darüber oder darunter,
-                # da GeoJson keine automatische Farblegende generiert.
+                map_html = m_global.get_root().render()
 
-                st_folium(m_global, height=500, use_container_width=True)
-
-            with m2:
-                st.markdown(
-                    '<div class="chart-title">TOP REGIONS</div>', unsafe_allow_html=True
+                # This replacement forces the body inside the iframe to have 0 margin,
+                # so the map touches the card borders perfectly.
+                map_html = map_html.replace(
+                    "</head>",
+                    "<style>html, body {width: 100%; height: 100%; margin: 0; padding: 0;}</style></head>",
                 )
+
+                # Render with components.html (Height 500 matches the card layout)
+                components.html(map_html, height=525)
+            with m2:
                 top = backend_api.get_top_countries(
                     selected_plant, st.session_state.regional_scan
                 )
                 st.plotly_chart(
-                    create_top_countries_chart(top, height=500),
+                    create_top_countries_chart(
+                        top, current_name=location_name, current_score=score, height=500
+                    ),
                     use_container_width=True,
                 )
