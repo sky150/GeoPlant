@@ -31,10 +31,20 @@ def _normalize(val, min_v, max_v):
     return max(0, min(100, (val - min_v) / (max_v - min_v) * 100))
 
 
-def _convert_real_data_to_df(real_data):
+def _convert_real_data_to_df(real_data, override_water_source=None):
+    """
+    Helper to convert raw data into % match for charts.
+    Allows overriding water_source to simulate 'Natural' vs 'Irrigated' states.
+    """
     climate = real_data["climate"]
     plant = real_data["plant"]
-    water_source = real_data.get("water_source", "Rainfed Only")
+
+    # Use override if provided, else use actual selection
+    water_source = (
+        override_water_source
+        if override_water_source
+        else real_data.get("water_source", "Rainfed Only")
+    )
 
     # 1. Ideals
     p_temp_opt = (plant["Min_Temp"] + plant["Max_Temp"]) / 2
@@ -165,38 +175,60 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
     if not real_data:
         return go.Figure()
 
-    df = _convert_real_data_to_df(real_data)
+    # 1. Get Natural Data (Always Rainfed) for the Pink Base
+    df_natural = _convert_real_data_to_df(
+        real_data, override_water_source="Rainfed Only"
+    )
 
-    # Dynamische Skalierung: Wenn ein Wert 150% ist, muss der Chart bis mind. 150 gehen
-    max_val = df["local_value"].max()
-    chart_range = [0, max(140, max_val + 10)]  # Mindestens bis 140, sonst dynamisch
+    # 2. Get Actual Data (Could be Irrigated) for the Blue Overlay
+    is_irrigated = real_data.get("water_source") == "Irrigated"
+    df_actual = _convert_real_data_to_df(real_data) if is_irrigated else df_natural
+
+    max_val = max(df_natural["local_value"].max(), df_actual["local_value"].max())
+    chart_range = [0, max(140, max_val + 10)]
 
     fig = go.Figure()
 
-    # 1. Die Pflanze (Referenz = 100%)
+    # --- TRACE 1: OPTIMUM (Dotted Line) ---
     fig.add_trace(
         go.Scatterpolar(
-            r=df["plant_optimum"].tolist() + [df["plant_optimum"].iloc[0]],
-            theta=df["condition"].tolist() + [df["condition"].iloc[0]],
+            r=df_natural["plant_optimum"].tolist()
+            + [df_natural["plant_optimum"].iloc[0]],
+            theta=df_natural["condition"].tolist() + [df_natural["condition"].iloc[0]],
             fill="toself",
             name=f"{plant_name} (Optimum)",
             line=dict(color=C_BLACK, width=2, dash="dot"),
-            fillcolor="rgba(200, 200, 200, 0.2)",  # Dezentes Grau für Basis
+            fillcolor="rgba(200, 200, 200, 0.1)",
             hoverinfo="skip",
         )
     )
 
-    # 2. Der Ort (Variabel)
+    # --- TRACE 2: NATURAL CLIMATE (Pink) ---
     fig.add_trace(
         go.Scatterpolar(
-            r=df["local_value"].tolist() + [df["local_value"].iloc[0]],
-            theta=df["condition"].tolist() + [df["condition"].iloc[0]],
+            r=df_natural["local_value"].tolist() + [df_natural["local_value"].iloc[0]],
+            theta=df_natural["condition"].tolist() + [df_natural["condition"].iloc[0]],
             fill="toself",
-            name="Location Data",
+            name="Natural Climate",
             line=dict(color=C_PINK, width=3),
-            fillcolor="rgba(241, 92, 227, 0.4)",
+            fillcolor="rgba(241, 92, 227, 0.3)",  # Pink with opacity
         )
     )
+
+    # --- TRACE 3: IRRIGATED (Blue) - Only if selected ---
+    if is_irrigated:
+        fig.add_trace(
+            go.Scatterpolar(
+                r=df_actual["local_value"].tolist()
+                + [df_actual["local_value"].iloc[0]],
+                theta=df_actual["condition"].tolist()
+                + [df_actual["condition"].iloc[0]],
+                fill="toself",
+                name="With Irrigation",
+                line=dict(color=C_MED_BLUE, width=3),
+                fillcolor="rgba(31, 137, 216, 0.2)",  # Blue with lower opacity
+            )
+        )
 
     fig.update_layout(
         title=dict(
@@ -226,12 +258,20 @@ def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
 
     df = _convert_real_data_to_df(real_data)
 
-    # WICHTIG: Sortierung nach fester Reihenfolge erzwingen
     order = ["Temp", "Hum", "Rain", "Sun", "pH"]
     df["condition"] = pd.Categorical(df["condition"], categories=order, ordered=True)
-    df = df.sort_values("condition", ascending=False)  # Reversed für horizontale Bars
+    df = df.sort_values("condition", ascending=False)
 
-    colors = [C_MED_BLUE if x < 0 else C_PINK for x in df["difference"]]
+    # Colors: Blue if negative, Pink if positive.
+    # SPECIAL: If 'Rain' is artificial (Irrigated), make it the Bonus Blue.
+    colors = []
+    for _, row in df.iterrows():
+        if row["is_artificial"] and row["condition"] == "Rain":
+            colors.append(C_MED_BLUE)  # Artificial Fix (Blue)
+        elif row["difference"] < 0:
+            colors.append(C_MED_BLUE)
+        else:
+            colors.append(C_PINK)
 
     fig = go.Figure()
     fig.add_trace(
@@ -260,11 +300,7 @@ def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
         margin=dict(t=30, b=20, l=10, r=40),
         paper_bgcolor="rgba(0,0,0,0)",
         font={"family": "Poppins"},
-        xaxis=dict(
-            zeroline=True,
-            showgrid=True,
-            range=[-limit, limit],
-        ),
+        xaxis=dict(zeroline=True, showgrid=True, range=[-limit, limit]),
         yaxis=dict(
             tickfont=dict(size=11), categoryorder="array", categoryarray=order[::-1]
         ),
