@@ -268,16 +268,16 @@ def create_diverging_bar_chart(plant_name, loc_name, real_data, height=350):
     df["condition"] = pd.Categorical(df["condition"], categories=order, ordered=True)
     df = df.sort_values("condition", ascending=False)
 
-    # Colors: Blue if negative, Pink if positive.
-    # SPECIAL: If 'Rain' is artificial (Irrigated), make it the Bonus Blue.
     colors = []
     for _, row in df.iterrows():
-        if row["is_artificial"] and row["condition"] == "Rain":
-            colors.append(C_MED_BLUE)  # Artificial Fix (Blue)
-        elif row["difference"] < 0:
-            colors.append(C_MED_BLUE)
+        abs_diff = abs(row["difference"])
+
+        if abs_diff <= 5:
+            colors.append(C_LIME)  # <= 5% deviation (positive)
+        elif abs_diff <= 13:
+            colors.append(C_MED_BLUE)  # <= 13% deviation (neutral)
         else:
-            colors.append(C_PINK)
+            colors.append(C_PINK)  # > 13% deviation (negative)
 
     fig = go.Figure()
     fig.add_trace(
