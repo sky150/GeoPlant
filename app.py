@@ -143,19 +143,14 @@ with st.container():
             st.error("Database Empty")
             st.stop()
 
-        # 1. Plant Selection
         selected_plant = st.selectbox("Plant Species:", plant_list)
-
-        # 2. Water Source Selection (New)
         selected_water = st.selectbox("Water Source:", ["Rainfed Only", "Irrigated"])
-
         selected_goal = st.selectbox(
             "Yield Target:", ["Survival", "Max Yield (Strict)"]
         )
 
     with c2:
         st.markdown("### 2. PICK LOCATION")
-        # Input Map (Folium - Clean Tiles)
         m = folium.Map(
             location=[st.session_state.lat, st.session_state.lon],
             zoom_start=4,
@@ -176,7 +171,6 @@ with st.container():
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("RUN GLOBAL ANALYSIS", type="primary", use_container_width=True):
         with st.spinner("Scanning 190+ Countries..."):
-            # 1. Analyze Point
             res = backend_api.analyze_suitability(
                 selected_plant,
                 st.session_state.lat,
@@ -186,7 +180,6 @@ with st.container():
             )
             st.session_state.analysis_result = res
 
-            # 2. Global Scan
             if "error" not in res:
                 st.session_state.regional_scan = backend_api.scan_continent_heatmap(
                     selected_plant,
@@ -213,7 +206,6 @@ if st.session_state.analysis_result:
         location_name = res.get("location_name", "Unknown Location")
 
         st.divider()
-        # --- NEW: KPI LAYER (Crop Info & Climate Summary) ---
         k1, k2 = st.columns(2)
 
         with k1:
@@ -285,8 +277,6 @@ if st.session_state.analysis_result:
                 use_container_width=True,
             )
 
-        # Removed the divider line between top charts and map section
-
         # --- ROW 2: MAP & TOP LIST ---
         m1, m2 = st.columns([2.7, 1])
 
@@ -294,7 +284,6 @@ if st.session_state.analysis_result:
             with m1:
                 scan_df = st.session_state.regional_scan
 
-                # Karte initialisieren (No Labels)
                 m_global = folium.Map(
                     location=[20, 0],
                     zoom_start=2,
@@ -372,14 +361,11 @@ if st.session_state.analysis_result:
 
                 map_html = m_global.get_root().render()
 
-                # This replacement forces the body inside the iframe to have 0 margin,
-                # so the map touches the card borders perfectly.
                 map_html = map_html.replace(
                     "</head>",
                     "<style>html, body {width: 100%; height: 100%; margin: 0; padding: 0;}</style></head>",
                 )
 
-                # Render with components.html (Height 500 matches the card layout)
                 components.html(map_html, height=525)
             with m2:
                 top = backend_api.get_top_countries(

@@ -26,11 +26,6 @@ TITLE_CONFIG = dict(
 # --------------------------------------------------------------------------
 # LOGIC: CONVERT REAL DATA TO RELATIVE PERCENTAGES
 # --------------------------------------------------------------------------
-def _normalize(val, min_v, max_v):
-    if val is None:
-        return 50
-    return max(0, min(100, (val - min_v) / (max_v - min_v) * 100))
-
 
 def _convert_real_data_to_df(real_data, override_water_source=None):
     """
@@ -40,24 +35,20 @@ def _convert_real_data_to_df(real_data, override_water_source=None):
     climate = real_data["climate"]
     plant = real_data["plant"]
 
-    # Use override if provided, else use actual selection
     water_source = (
         override_water_source
         if override_water_source
         else real_data.get("water_source", "Rainfed Only")
     )
 
-    # 1. Ideals
     p_temp_opt = (plant["Min_Temp"] + plant["Max_Temp"]) / 2
     p_rain_opt = (plant["Min_Rain"] + plant["Max_Rain"]) / 2
     p_ph_opt = (plant["Min_pH"] + plant["Max_pH"]) / 2
     p_sun_opt = plant.get("Sun_Need", 80)
     p_hum_opt = plant.get("Ideal_Hum", 50)
 
-    # 2. Local Data
     l_temp = climate["mean_temp"]
 
-    # IRRIGATION LOGIC: If Irrigated, pretend rain is optimal
     if water_source == "Irrigated":
         l_rain = p_rain_opt
     else:
@@ -67,26 +58,23 @@ def _convert_real_data_to_df(real_data, override_water_source=None):
     l_sun = climate.get("sun", 80)
     l_hum = climate.get("humidity", 60)
 
-    # 3. Ratio Calculation
-    def calculate_ratio(local, optimum, is_interval=False):
+    def calculate_ratio(local, optimum):
         if optimum == 0:
             return 100 + (local * 10)
         ratio = (local / optimum) * 100
         return ratio
 
-    # 4. Compile
     data = [
-        ("Temp", 100, calculate_ratio(l_temp, p_temp_opt, is_interval=True)),
+        ("Temp", 100, calculate_ratio(l_temp, p_temp_opt)),
         ("Rain", 100, calculate_ratio(l_rain, p_rain_opt)),
         ("Sun", 100, calculate_ratio(l_sun, p_sun_opt)),
         ("Hum", 100, calculate_ratio(l_hum, p_hum_opt)),
-        ("pH", 100, calculate_ratio(l_ph, p_ph_opt, is_interval=True)),
+        ("pH", 100, calculate_ratio(l_ph, p_ph_opt)),
     ]
 
     df = pd.DataFrame(data, columns=["condition", "plant_optimum", "local_value"])
     df["difference"] = df["local_value"] - 100
 
-    # Mark Rain as "Artificial" if irrigated for coloring later
     df["is_artificial"] = False
     if water_source == "Irrigated":
         df.loc[df["condition"] == "Rain", "is_artificial"] = True
@@ -105,11 +93,9 @@ def create_circular_gauge(score, real_data=None, height=350):
     """
     fig = go.Figure()
 
-    # Get bonus
     bonus = real_data.get("bonus", 0) if real_data else 0
     base_score = score - bonus
 
-    # 1. Color Logic
     if score >= 75:
         active_color = C_LIME
     elif score >= 45:
@@ -117,7 +103,6 @@ def create_circular_gauge(score, real_data=None, height=350):
     else:
         active_color = C_PINK
 
-    # 2. Segments
     total_segments = 40
     # Segments for the "Natural" score
     base_lit = int(base_score / (100 / total_segments))
@@ -182,12 +167,10 @@ def create_radar_chart(plant_name, loc_name, real_data, height=350):
     if not real_data:
         return go.Figure()
 
-    # 1. Get Natural Data (Always Rainfed) for the Pink Base
     df_natural = _convert_real_data_to_df(
         real_data, override_water_source="Rainfed Only"
     )
 
-    # 2. Get Actual Data (Could be Irrigated) for the Blue Overlay
     is_irrigated = real_data.get("water_source") == "Irrigated"
     df_actual = _convert_real_data_to_df(real_data) if is_irrigated else df_natural
 
@@ -327,29 +310,23 @@ def create_top_countries_chart(
 
     df = top_countries_df.copy()
 
-    # 1. Add Current Location to the list
     if current_name and current_score is not None:
-        # Avoid duplicates if current location is already in top 10
         if current_name not in df["country"].values:
             new_row = pd.DataFrame(
                 [{"country": current_name, "avg_score": current_score}]
             )
             df = pd.concat([df, new_row], ignore_index=True)
         else:
-            # Update score just in case logic differed slightly
             df.loc[df["country"] == current_name, "avg_score"] = current_score
 
-    # 2. Sort so best is at the top (bar charts usually read top-down)
     df = df.sort_values("avg_score", ascending=True)
 
-    # 3. Apply Colors and Bold Logic
     colors = []
     labels = []
 
     for country in df["country"]:
         score = df.loc[df["country"] == country, "avg_score"].values[0]
 
-        # Standard Color Logic for ALL bars
         if score >= 75:
             colors.append(C_LIME)
         elif score >= 45:
@@ -357,16 +334,15 @@ def create_top_countries_chart(
         else:
             colors.append(C_PINK)
 
-        # Highlight Logic: Bold Text Only
         if country == current_name:
-            labels.append(f"<b>{country}</b>")  # Bold HTML tag
+            labels.append(f"<b>{country}</b>") 
         else:
             labels.append(country)
 
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
-            y=labels,  # Use the list with the bold HTML
+            y=labels,  
             x=df["avg_score"],
             orientation="h",
             marker=dict(color=colors, line=dict(color=C_BLACK, width=2)),

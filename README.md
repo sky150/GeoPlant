@@ -52,7 +52,7 @@ We rely on **CHELSA V2.1**. You must download these 6 files (~2GB total) and pla
 | **Bio 17** (Driest Qtr) | **CRITICAL:** Detects Summer Droughts. | [Download Bio17](https://os.unil.cloud.switch.ch/chelsa02/chelsa/global/bioclim/bio17/1981-2010/CHELSA_bio17_1981-2010_V.2.1.tif) |
 
 **Plant Data:**
-Ensure `EcoCrop_DB.csv` (Source: FAO EcoCrop) is in the main folder.
+Ensure `EcoCrop_DB.csv` (Source: FAO EcoCrop) is in the `data` folder.
 
 ---
 

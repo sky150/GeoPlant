@@ -35,33 +35,28 @@ def _calculate_single_score(plant, climate, ignore_drought=False, use_optimal=Fa
     reasons = []
     status = "Ideal"
 
-    # Select which rules to use based on the filter
     if use_optimal:
-        # STRICT MODE (Commercial Yield)
         t_min = plant["Opt_Min_Temp"]
         t_max = plant["Opt_Max_Temp"]
         r_min = plant["Opt_Min_Rain"]
         r_max = plant["Opt_Max_Rain"]
     else:
-        # RELAXED MODE (Survival)
         t_min = plant["Min_Temp"]
         t_max = plant["Max_Temp"]
         r_min = plant["Min_Rain"]
         r_max = plant["Max_Rain"]
 
-    # 1. Temperature Check
     if climate["min_temp"] < t_min:
         score = 0
         status = "Dead" if not use_optimal else "Low Yield"
         reasons.append(f"❄️ Too Cold: {climate['min_temp']}°C < {t_min}°C")
-        return 0, status, reasons  # Stop checking if temp fails
+        return 0, status, reasons
 
     if climate["max_temp"] > t_max:
         score -= 20
         status = "Stress"
         reasons.append(f"🔥 Too Hot: {climate['max_temp']}°C > {t_max}°C")
 
-    # 2. Water Check
     if climate["rain"] < r_min:
         if not ignore_drought:
             score -= 40
@@ -81,20 +76,16 @@ def calculate_score_logic(
     if not climate or not plant:
         return 0, "Error", [], 0
 
-    # Determine strictness
     use_optimal = yield_goal == "Max Yield (Strict)"
 
-    # 1. Calculate Natural Score
     score_nat, status_nat, reasons_nat = _calculate_single_score(
         plant, climate, ignore_drought=False, use_optimal=use_optimal
     )
 
-    # 2. Calculate Irrigated Score
     score_irr, status_irr, reasons_irr = _calculate_single_score(
         plant, climate, ignore_drought=True, use_optimal=use_optimal
     )
 
-    # 3. Apply Logic
     if water_source == "Irrigated":
         final_score = score_irr
         final_status = status_irr
