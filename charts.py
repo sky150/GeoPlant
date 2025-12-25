@@ -339,6 +339,8 @@ def create_top_countries_chart(
         else:
             labels.append(country)
 
+    text_positions = ["outside" if s == 0 else "auto" for s in df["avg_score"]]
+
     fig = go.Figure()
     fig.add_trace(
         go.Bar(
@@ -347,6 +349,7 @@ def create_top_countries_chart(
             orientation="h",
             marker=dict(color=colors, line=dict(color=C_BLACK, width=2)),
             text=[f"{x:.0f}%" for x in df["avg_score"]],
+            textposition=text_positions,
             textfont=dict(family=FONT_MAIN, size=12, color=C_BLACK),
         )
     )
