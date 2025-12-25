@@ -7,6 +7,7 @@ import numpy as np
 # --------------------------------------------------------------------------
 C_DARK_BLUE = "#1F89D8"
 C_MED_BLUE = "#1F89D8"
+C_LIGHT_BLUE = "#5CCDF8"
 C_PINK = "#F15CE3"
 C_YELLOW = "#DAFF15"
 C_LIME = "#BDD409"
@@ -109,10 +110,10 @@ def create_circular_gauge(score, real_data=None, height=350):
     base_score = score - bonus
 
     # 1. Color Logic
-    if score >= 80:
+    if score >= 75:
         active_color = C_LIME
-    elif score >= 50:
-        active_color = C_YELLOW
+    elif score >= 45:
+        active_color = C_MED_BLUE
     else:
         active_color = C_PINK
 

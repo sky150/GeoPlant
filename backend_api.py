@@ -243,7 +243,7 @@ def analyze_suitability(
     )
     loc_name = get_location_name(lat, lon)
 
-    return {
+    result = {
         "score": score,
         "status": status,
         "reasons": reasons,
@@ -254,8 +254,18 @@ def analyze_suitability(
         "water_source": water_source,
     }
 
+    print(f"\n🐛 DEBUG RESULT OBJECT: {result}\n")
 
-def scan_continent_heatmap(plant_name, center_lat, center_lon, num_samples=200):
+    return result
+
+
+def scan_continent_heatmap(
+    plant_name,
+    center_lat,
+    center_lon,
+    water_source="Rainfed Only",
+    yield_goal="Survival",
+):
     conn = get_db_connection()
     if not conn:
         return pd.DataFrame()
@@ -267,7 +277,7 @@ def scan_continent_heatmap(plant_name, center_lat, center_lon, num_samples=200):
         climate = fetch_climate_data(cur, lat, lon)
         if climate:
             # Fixed unpacking error
-            score = calculate_score_logic(plant, climate, "Rainfed Only", "Survival")[0]
+            score = calculate_score_logic(plant, climate, water_source, yield_goal)[0]
             results.append({"country": country, "lat": lat, "lon": lon, "score": score})
 
     conn.close()

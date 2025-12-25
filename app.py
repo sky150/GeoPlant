@@ -189,7 +189,11 @@ with st.container():
             # 2. Global Scan
             if "error" not in res:
                 st.session_state.regional_scan = backend_api.scan_continent_heatmap(
-                    selected_plant, 0, 0
+                    selected_plant,
+                    0,
+                    0,
+                    water_source=selected_water,
+                    yield_goal=selected_goal,
                 )
             st.rerun()
 

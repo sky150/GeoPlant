@@ -52,7 +52,7 @@ We rely on **CHELSA V2.1**. You must download these 6 files (~2GB total) and pla
 | **Bio 17** (Driest Qtr) | **CRITICAL:** Detects Summer Droughts. | [Download Bio17](https://os.unil.cloud.switch.ch/chelsa02/chelsa/global/bioclim/bio17/1981-2010/CHELSA_bio17_1981-2010_V.2.1.tif) |
 
 **Plant Data:**
-Ensure `plants.csv` (Source: Kaggle) is in the main folder.
+Ensure `EcoCrop_DB.csv` (Source: FAO EcoCrop) is in the main folder.
 
 ---
 
@@ -79,6 +79,10 @@ docker exec -it geoplant_db bash
 
 ```bash
 apt-get update && apt-get install -y postgis
+
+# ENABLE POSTGIS EXTENSION (Important!)
+psql -U postgres -d geoplant -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+psql -U postgres -d geoplant -c "CREATE EXTENSION IF NOT EXISTS postgis_raster;"
 ```
 
 **C. Run the Import Commands (Copy/Paste one by one):**
@@ -110,7 +114,7 @@ Type `exit`.
 ---
 
 ### Step 6: Upload Plant Data
-Now we run the Python script to clean the Kaggle CSV and put it in the database.
+Now we run the Python script to clean the EcoCrop CSV and put it in the database.
 
 ```bash
 docker exec -it geoplant_app python clean_and_upload.py

@@ -63,3 +63,43 @@ After clicking **RUN GLOBAL ANALYSIS**, the dashboard updates with three key ins
     * **Green Areas:** High Suitability (>75).
     * **Blue Areas:** Moderate Suitability.
     * **Pink Areas:** Low Suitability.
+
+## 5. Example Use Cases (Demo Scripts)
+
+Use these scenarios to test the dashboard's capabilities.
+
+### Scenario A: The "Microclimate" Detective (Precision Test)
+*Demonstrates how location precision matters (Coast vs. Desert).*
+
+* **Plant:** *Agropyron desertorum* (Desert Wheatgrass)
+* **Settings:** Rainfed Only / Survival
+* **Action 1:** Click on **Northern Algeria** (near the coast/Algiers).
+    * **Result:** **Moderate Suitability (~60%)**. The Mediterranean breeze keeps winters mild (above 5°C).
+* **Action 2:** Click on **Central Algeria** (deep in the Sahara).
+    * **Result:** **Suitability 0% (Dead)**.
+    * **Why?** Check the "Reasons". Even though it is a desert plant, the deep desert has freezing nights (3.8°C), killing the plant.
+* **Takeaway:** GeoPlant detects local microclimates that generic "Country Averages" miss.
+
+### Scenario B: The "Irrigation Simulator" (What-If Analysis)
+*Demonstrates how farmers can solve drought problems.*
+
+* **Plant:** *Hordeum vulgare* (Barley)
+* **Location:** **Egypt** (near the Nile Delta).
+* **Step 1 (Rainfed):**
+    * **Result:** **Score 0-10% (Red)**.
+    * **Reason:** Egypt has ~2mm of rain. Barley needs 200mm. It dies of thirst.
+* **Step 2 (Change Filter):** Switch Water Source to **"Irrigated"**.
+    * **Result:** **Score 100% (Green)**.
+    * **Why?** The Temperature in Egypt is actually perfect for Barley (above 2°C). Once you artificially fix the water deficit, the location becomes ideal.
+
+### Scenario C: The "Climate Barrier" (Biological Limits)
+*Demonstrates that some factors (Temperature) cannot be fixed.*
+
+* **Plant:** *Olea europaea* (Olive Tree)
+* **Location:** **Germany** (vs. Italy).
+* **Action:** Click anywhere in Germany.
+    * **Result:** **Score 0% (Dead)**.
+    * **Reason:** "❄️ Too Cold". Olives die if winter drops below 5°C. Germany is too cold.
+* **Try Filters:** Switch to "Irrigated".
+    * **Result:** **Still 0%**.
+    * **Takeaway:** You can irrigate a dry plant, but you cannot easily heat a frozen country. This shows the tool's biological accuracy (Liebig's Law of the Minimum).
