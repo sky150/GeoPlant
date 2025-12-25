@@ -1,4 +1,4 @@
-version: '2.8'
+#version: '2.8'
 
 services:
   # 1. DATABASE SERVICE
@@ -29,7 +29,7 @@ services:
       - db
     environment:
       # This tells Python where to find the database
-      - DB_HOST=geoplant_db 
+      - DB_HOST=geoplant_db
       - DB_USER=postgres
       - DB_PASS=admin
       - DB_NAME=geoplant

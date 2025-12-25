@@ -63,6 +63,22 @@ iframe {
     text-transform: uppercase;
 }
 
+.pop-card h3.kpi-title {
+    font-size: 1.4rem;
+    color: var(--c-dark-blue);
+}
+
+/* KPI CARD TITLES (Plant & Location) */
+.kpi-title {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 900;
+    font-size: 1.4rem;
+    color: var(--c-dark-blue);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+}
+
 /* 4. STATS LAYOUT (New classes for the cards) */
 .stat-container { display: flex; justify-content: space-between; text-align: left; gap: 25px; }
 .stat-item { width: 32%; }
@@ -200,7 +216,7 @@ if st.session_state.analysis_result:
             st.markdown(
                 f"""
             <div class="pop-card">
-                <h3>Crop Requirements: {plant['name']}</h3>
+                <h3 class="kpi-title">Plant: {plant['name']}</h3>
                 <div class="stat-container">
                     <div class="stat-item">
                         <div class="stat-label">Optimal Temp</div>
@@ -224,7 +240,7 @@ if st.session_state.analysis_result:
             st.markdown(
                 f"""
             <div class="pop-card">
-                <h3>Location Climate Summary: {location_name}</h3>
+                <h3 class="kpi-title">Location: {location_name}</h3>
                 <div class="stat-container">
                     <div class="stat-item">
                         <div class="stat-label">Winter Low</div>

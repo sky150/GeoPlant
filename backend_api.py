@@ -117,7 +117,7 @@ def calculate_score_logic(
 def fetch_climate_data(cursor, lat, lon):
     lat, lon = float(lat), float(lon)
     query = """
-    SELECT 
+    SELECT
         ST_Value(mean.rast, ST_SetSRID(ST_Point(%s, %s), 4326)),
         ST_Value(min.rast, ST_SetSRID(ST_Point(%s, %s), 4326)),
         ST_Value(max.rast, ST_SetSRID(ST_Point(%s, %s), 4326)),
@@ -178,9 +178,7 @@ def get_plant_rules(plant_name):
     conn = get_db_connection()
     cur = conn.cursor()
     query = """
-        SELECT min_temp_c, max_temp_c, min_rain_mm, max_rain_mm, min_ph, max_ph,
-               opt_min_temp_c, opt_max_temp_c, opt_min_rain_mm, opt_max_rain_mm, 
-               opt_min_ph, opt_max_ph
+        SELECT min_temp_c, max_temp_c, min_rain_mm, max_rain_mm, min_ph, max_ph, opt_min_temp_c, opt_max_temp_c, opt_min_rain_mm, opt_max_rain_mm, opt_min_ph, opt_max_ph
         FROM plants WHERE name = %s
     """
     cur.execute(query, (plant_name,))
