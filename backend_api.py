@@ -155,21 +155,44 @@ def fetch_climate_data(cursor, lat, lon):
 
 
 def get_plant_list():
+    """
+    NEU: Gibt Liste von Dictionaries zurück mit common_name und scientific_name
+    """
     conn = get_db_connection()
     if not conn:
         return []
     cur = conn.cursor()
-    cur.execute("SELECT name FROM plants ORDER BY name ASC")
-    res = [r[0] for r in cur.fetchall()]
+
+    # NEU: Beide Namen holen und sortieren nach common_name
+    cur.execute("""
+        SELECT name, common_name
+        FROM plants
+        ORDER BY common_name ASC
+    """)
+
+    # NEU: Als Dictionary zurückgeben
+    results = []
+    for scientific_name, common_name in cur.fetchall():
+        results.append({
+            'scientific_name': scientific_name,
+            'common_name': common_name,
+            'display_name': f"{common_name} ({scientific_name})" if common_name != scientific_name else scientific_name
+        })
+
     conn.close()
-    return res
+    return results
 
 
 def get_plant_rules(plant_name):
+    """
+    plant_name ist der scientific name (aus der Datenbank)
+    """
     conn = get_db_connection()
     cur = conn.cursor()
     query = """
-        SELECT min_temp_c, max_temp_c, min_rain_mm, max_rain_mm, min_ph, max_ph, opt_min_temp_c, opt_max_temp_c, opt_min_rain_mm, opt_max_rain_mm, opt_min_ph, opt_max_ph
+        SELECT name, common_name, min_temp_c, max_temp_c, min_rain_mm, max_rain_mm,
+               min_ph, max_ph, opt_min_temp_c, opt_max_temp_c, opt_min_rain_mm,
+               opt_max_rain_mm, opt_min_ph, opt_max_ph
         FROM plants WHERE name = %s
     """
     cur.execute(query, (plant_name,))
@@ -179,21 +202,22 @@ def get_plant_rules(plant_name):
         return None
 
     return {
-        "name": plant_name,
+        "name": row[0],
+        "common_name": row[1],  # NEU!
         # Absolute Limits
-        "Min_Temp": row[0],
-        "Max_Temp": row[1],
-        "Min_Rain": row[2],
-        "Max_Rain": row[3],
-        "Min_pH": row[4],
-        "Max_pH": row[5],
+        "Min_Temp": row[2],
+        "Max_Temp": row[3],
+        "Min_Rain": row[4],
+        "Max_Rain": row[5],
+        "Min_pH": row[6],
+        "Max_pH": row[7],
         # Optimal Ranges
-        "Opt_Min_Temp": row[6] if row[6] is not None else row[0],
-        "Opt_Max_Temp": row[7] if row[7] is not None else row[1],
-        "Opt_Min_Rain": row[8] if row[8] is not None else row[2],
-        "Opt_Max_Rain": row[9] if row[9] is not None else row[3],
-        "Opt_Min_pH": row[10] if row[10] is not None else row[4],
-        "Opt_Max_pH": row[11] if row[11] is not None else row[5],
+        "Opt_Min_Temp": row[8] if row[8] is not None else row[2],
+        "Opt_Max_Temp": row[9] if row[9] is not None else row[3],
+        "Opt_Min_Rain": row[10] if row[10] is not None else row[4],
+        "Opt_Max_Rain": row[11] if row[11] is not None else row[5],
+        "Opt_Min_pH": row[12] if row[12] is not None else row[6],
+        "Opt_Max_pH": row[13] if row[13] is not None else row[7],
         "Ideal_Hum": 50,
         "Sun_Need": 80,
     }
@@ -267,7 +291,6 @@ def scan_continent_heatmap(
     for country, (lat, lon) in WORLD_LOCATIONS.items():
         climate = fetch_climate_data(cur, lat, lon)
         if climate:
-            # Fixed unpacking error
             score = calculate_score_logic(plant, climate, water_source, yield_goal)[0]
             results.append({"country": country, "lat": lat, "lon": lon, "score": score})
 

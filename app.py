@@ -143,7 +143,15 @@ with st.container():
             st.error("Database Empty")
             st.stop()
 
-        selected_plant = st.selectbox("Plant Species:", plant_list)
+        # NEU: Dropdown mit Display-Namen, aber speichere scientific name
+        display_options = [p['display_name'] for p in plant_list]
+
+        # Mapping für die Rückübersetzung
+        display_to_scientific = {p['display_name']: p['scientific_name'] for p in plant_list}
+
+        selected_display = st.selectbox("Plant Species:", display_options)
+        selected_plant = display_to_scientific[selected_display]
+
         selected_water = st.selectbox("Water Source:", ["Rainfed Only", "Irrigated"])
         selected_goal = st.selectbox(
             "Yield Target:", ["Survival", "Max Yield (Strict)"]
@@ -209,10 +217,12 @@ if st.session_state.analysis_result:
         k1, k2 = st.columns(2)
 
         with k1:
+            # NEU: Zeige common_name als Haupttitel
+            display_plant_name = plant.get('common_name', plant['name'])
             st.markdown(
                 f"""
             <div class="pop-card">
-                <h3 class="kpi-title">Plant: {plant['name']}</h3>
+                <h3 class="kpi-title">Plant: {display_plant_name}</h3>
                 <div class="stat-container">
                     <div class="stat-item">
                         <div class="stat-label">Optimal Temp</div>
