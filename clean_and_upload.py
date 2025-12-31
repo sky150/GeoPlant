@@ -23,9 +23,10 @@ def clean_ecocrop():
     except:
         df = pd.read_csv(INPUT_CSV, encoding="latin1")
 
-    # 1. Map Columns
+    # 1. Map Columns (NEU: COMNAME hinzugefügt)
     col_map = {
         "ScientificName": "name",
+        "COMNAME": "common_name",  # NEU!
         "TMIN": "min_temp_c",
         "TMAX": "max_temp_c",
         "RMIN": "min_rain_mm",
@@ -48,7 +49,7 @@ def clean_ecocrop():
     df.replace(["NA", "na", "", " "], np.nan, inplace=True)
 
     # 3. Numeric Conversion
-    numeric_cols = [c for c in available_cols if c != "name"]
+    numeric_cols = [c for c in available_cols if c not in ["name", "common_name"]]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -57,7 +58,15 @@ def clean_ecocrop():
     df = df.dropna(subset=critical_cols)
     df = df.dropna(subset=["name"])
 
-    # 5. Fill Missing Optimal Values
+    # 5. Common Name Processing (NEU!)
+    # Falls common_name leer ist, scientific name verwenden
+    df["common_name"] = df["common_name"].fillna(df["name"])
+    # Nur den ersten Namen nehmen (vor dem ersten Komma) und capitalize
+    df["common_name"] = df["common_name"].apply(
+        lambda x: str(x).split(",")[0].strip().capitalize() if pd.notna(x) else x
+    )
+
+    # 6. Fill Missing Optimal Values
     df["opt_min_temp_c"] = df["opt_min_temp_c"].fillna(df["min_temp_c"])
     df["opt_max_temp_c"] = df["opt_max_temp_c"].fillna(df["max_temp_c"])
     df["opt_min_rain_mm"] = df["opt_min_rain_mm"].fillna(df["min_rain_mm"])
@@ -85,18 +94,25 @@ if __name__ == "__main__":
             print("\nRecreating Database Table...")
             engine = create_engine(DB_CONNECTION)
 
-            # --- NEU: Tabelle per SQL erstellen ---
+            # NEU: Tabelle mit common_name Spalte erstellen
             create_table_sql = """
             DROP TABLE IF EXISTS plants;
             CREATE TABLE plants (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255),
-                min_temp_c FLOAT, max_temp_c FLOAT,
-                opt_min_temp_c FLOAT, opt_max_temp_c FLOAT,
-                min_rain_mm INT, max_rain_mm INT,
-                opt_min_rain_mm INT, opt_max_rain_mm INT,
-                min_ph FLOAT, max_ph FLOAT,
-                opt_min_ph FLOAT, opt_max_ph FLOAT
+                common_name VARCHAR(500),
+                min_temp_c FLOAT,
+                max_temp_c FLOAT,
+                opt_min_temp_c FLOAT,
+                opt_max_temp_c FLOAT,
+                min_rain_mm INT,
+                max_rain_mm INT,
+                opt_min_rain_mm INT,
+                opt_max_rain_mm INT,
+                min_ph FLOAT,
+                max_ph FLOAT,
+                opt_min_ph FLOAT,
+                opt_max_ph FLOAT
             );
             """
 
