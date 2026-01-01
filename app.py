@@ -144,18 +144,18 @@ with st.container():
             st.stop()
 
         # NEU: Dropdown mit Display-Namen, aber speichere scientific name
-        display_options = [p['display_name'] for p in plant_list]
+        display_options = [p["display_name"] for p in plant_list]
 
         # Mapping für die Rückübersetzung
-        display_to_scientific = {p['display_name']: p['scientific_name'] for p in plant_list}
+        display_to_scientific = {
+            p["display_name"]: p["scientific_name"] for p in plant_list
+        }
 
         selected_display = st.selectbox("Plant Species:", display_options)
         selected_plant = display_to_scientific[selected_display]
 
         selected_water = st.selectbox("Water Source:", ["Rainfed Only", "Irrigated"])
-        selected_goal = st.selectbox(
-            "Yield Target:", ["Survival", "Max Yield (Strict)"]
-        )
+        selected_goal = "Survival"
 
     with c2:
         st.markdown("### 2. PICK LOCATION")
@@ -218,7 +218,7 @@ if st.session_state.analysis_result:
 
         with k1:
             # NEU: Zeige common_name als Haupttitel
-            display_plant_name = plant.get('common_name', plant['name'])
+            display_plant_name = plant.get("common_name", plant["name"])
             st.markdown(
                 f"""
             <div class="pop-card">
