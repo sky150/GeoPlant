@@ -1,26 +1,33 @@
 # 📈 Visualization Guide
 
-GeoPlant uses specific charts to communicate "Suitability" and "Risk." Here is how to interpret them.
+The visualization strategy focuses on translating complex multi-dimensional data into relative percentages to ensure comparability across different variables (Temperature, Rain, pH, etc.). All charts are from the plant’s optimum point of view (=100%).
 
-## 1. Suitability Gauge
-**What it shows:** The final "Score" (0-100) of the location.
-* **Green Ring:** The Natural Score (based on rainfall and temp).
-* **Blue Segment:** The **Irrigation Bonus**. If you see a blue section, it means "The location is naturally dry, but if you add water, the suitability jumps up by this amount."
+## 1. Suitability Gauge (Circular Gauge)
 
-## 2. Conditions Radar
-**What it shows:** A comparison of the Location (Color) vs. the Plant's Optimum (Dotted Line).
+**What it shows:** This is the primary KPI.
+* **Design:** It uses a segmented block design to show the total score.
+* **Blue Segment (Irrigation Bonus):** A key feature is the Blue Segment, which visually separates natural suitability from the potential gains achieved through human intervention.
 
-* **Pink Shape (Natural Climate):** This represents the location's natural condition.
-    * *Inside the Dotted Line:* The location is lacking (too cold, too dry).
-    * *Outside the Dotted Line:* The location has excess (too hot, too wet).
-    * *On the Dotted Line:* Perfect match.
-* **Blue Shape (With Irrigation):** If you enable Irrigation, a blue shape appears. You will usually see the "Rain" axis extend out to the dotted line, visually proving that you have artificially fixed the water deficit.
+## 2. Conditions Radar Chart
 
-## 3. Deviation Bar Chart
-**What it shows:** Exactly how far "off" the location is from perfection.
+**What it shows:** This chart compares the location’s climate (Pink/Blue shapes) against the plant's biological optimum (Dotted Line).
 
-* **Center (0%):** Perfect Match.
-* **Left (Blue Bars):** Deficit. (e.g., -20% Rain means you have 20% less rain than the plant wants).
-* **Right (Pink Bars):** Excess. (e.g., +10% Temp means it is slightly hotter than optimal).
+* **Purpose:** It allows users to see at a glance which specific dimensions (e.g., humidity vs. temperature) are the limiting factors.
+* **Range:** The radar range expands from 100% upwards, depending on how much the location variable exceeds.
 
-**Tip:** "Blue" bars on the left (Deficits) can often be fixed by humans (Greenhouses, Irrigation). "Pink" bars on the right (Excesses) are often impossible to fix (you cannot air-condition a corn field).
+## 3. Diverging Bar Chart (Deviation)
+
+**What it shows:** To provide precise feedback, this chart shows the location’s percentage deviation from the plant’s optimum.
+
+* **Color Coding:** We used color-coding to highlight critical stressors:
+    * **Lime:** <5% deviation.
+    * **Blue:** Neutral.
+    * **Pink:** >13% deviation.
+
+## 4. Global Heatmap & Top Regions
+
+**What it shows:**
+* **The Map:** Colours areas with high suitability in lime, neutral areas in blue, and unsuitable regions in pink.
+* **Top Regions Bar Chart:** The bar chart on the right side benchmarks the user’s selected location against the highest-scoring regions worldwide.
+
+  
