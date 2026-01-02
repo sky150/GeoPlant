@@ -30,22 +30,7 @@ This filter is the most powerful tool for "Scenario Planning." It determines how
 
 ---
 
-## 3. Setting the Yield Target
-This filter determines how strict the "Grading System" is.
-
-### 🌱 Option A: Survival (Default)
-* **Target Audience:** Hobbyists, Home Gardeners, Reforestation Projects.
-* **Logic:** Uses the **Absolute Limits** of the plant.
-* **Example:** *Agropyron desertorum* can technically survive at very low temperatures. In this mode, as long as the plant doesn't freeze to death or dry out completely, it gets a passing score (Green/Yellow). It answers the question: *"Will it stay alive?"*
-
-### 💰 Option B: Max Yield (Strict)
-* **Target Audience:** Commercial Farmers looking for profit.
-* **Logic:** Uses the **Optimal Range** (The "Goldilocks Zone").
-* **Example:** While *Agropyron* might survive at 5°C, it grows fastest at 15°C. In this mode, a location with 5°C will get a **Low Score (Red/Orange)** because the yield would be poor. It answers the question: *"Will I make money?"*
-
----
-
-## 4. Understanding the Results
+## 3. Understanding the Results
 After clicking **RUN GLOBAL ANALYSIS**, the dashboard updates with three key insights:
 
 1.  **Suitability Gauge (The Score):**
@@ -64,7 +49,7 @@ After clicking **RUN GLOBAL ANALYSIS**, the dashboard updates with three key ins
     * **Blue Areas:** Moderate Suitability.
     * **Pink Areas:** Low Suitability.
 
-## 5. Example Use Cases (Demo Scripts)
+## 4. Example Use Cases (Demo Scripts)
 
 Use these scenarios to test the dashboard's capabilities.
 
