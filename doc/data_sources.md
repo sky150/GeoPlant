@@ -23,15 +23,4 @@ CHELSA offers **1km resolution** by downscaling global models using topographica
 
 We replaced generic crowd-sourced data with the **EcoCrop Database**. This dataset was built by the FAO specifically for Land Use Planning.
 
-### The "Dual Threshold" Logic
-Unlike simple datasets that provide a single "Temperature Range," EcoCrop provides two distinct sets of rules for over 2,000 species:
-
-1.  **Absolute Limits (Survival):**
-    * *Definition:* The temperature/rainfall beyond which the plant physically dies.
-    * *GeoPlant Logic:* If location is outside these limits → **Score = 0% (Dead)**.
-
-2.  **Optimal Range (Thriving):**
-    * *Definition:* The "Goldilocks" zone where the plant produces maximum yield.
-    * *GeoPlant Logic:* If location is inside these limits → **Score = 100% (Perfect)**.
-
-This allows GeoPlant to simulate the difference between "Surviving" (Hobby gardening) and "Thriving" (Commercial Farming).
+It provides standardized environmental requirements for over 2,500 species, defining both "Optimal" growing conditions and "Absolute" physiological limits. This structure allows GeoPlant to calculate a nuanced suitability gradient (0–100%) based on how close the local climate is to the plant's ideal range, rather than a simple pass/fail metric.
