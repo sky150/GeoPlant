@@ -1,6 +1,6 @@
-# 🌍 GeoPlant: Global Crop Suitability Engine
+# 🌱 [**GeoPlant**](https://geoplant.n4t7.com/): Global Crop Suitability Engine
 
-**GeoPlant** is a Precision Agriculture dashboard that helps farmers and researchers decide **where** to plant specific crops. It uses high-resolution climate rasters (CHELSA V2) and biological thresholds (FAO EcoCrop) to calculate a "Suitability Score" for any coordinate on Earth.
+[**GeoPlant**](https://geoplant.n4t7.com/) is a Precision Agriculture dashboard that helps farmers and researchers decide **where** to plant specific crops. It uses high-resolution climate rasters (CHELSA V2) and biological thresholds (FAO EcoCrop) to calculate a "Suitability Score" for any coordinate on Earth.
 
 ---
 
@@ -32,14 +32,17 @@ The app follows a **Service-Oriented Architecture** running on Docker:
 * [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Must be running).
 * Git.
 
-### Step 2: Clone & Prepare Folders
-Clone this repository. Then, inside the folder, create a folder for the raw data (it is ignored by Git):
+### Step 2: Clone repository
+* [GeoPlant repository on Github](https://github.com/sky150/GeoPlant)
+
+### Step 3: Prepare Folder
+* Then, inside the folder, create a folder for the raw data (it is ignored by Git):
 
 ```bash
 mkdir chelsa_raw
 ```
 
-### Step 3: Download Raw Data (The "Heavy Lift")
+### Step 4: Download Raw Data (The "Heavy Lift")
 We rely on **CHELSA V2.1**. You must download these 6 files (~2GB total) and place them inside the `chelsa_raw/` folder you just created.
 
 | File Name (Bio Variable) | Why we need it? | Download Link |
@@ -56,7 +59,7 @@ Ensure `EcoCrop_DB.csv` (Source: FAO EcoCrop) is in the `data` folder.
 
 ---
 
-### Step 4: Launch the System
+### Step 5: Launch the System
 Open your terminal in the project folder and run:
 
 ```bash
@@ -66,8 +69,8 @@ docker-compose up -d --build
 
 ---
 
-### Step 5: Data Ingestion (The One-Time Setup)
-We need to load the Tiff files into the Database.
+### Step 6: Data Ingestion (The One-Time Setup)
+We need to load the Tiff files into the Database. This may take 2-3 hours.
 
 **A. Enter the Database Container:**
 
@@ -113,7 +116,7 @@ Type `exit`.
 
 ---
 
-### Step 6: Upload Plant Data
+### Step 7: Upload Plant Data
 Now we run the Python script to clean the EcoCrop CSV and put it in the database.
 
 ```bash
@@ -129,22 +132,22 @@ Once the setup is done, the app starts automatically!
 
 ## 📂 Code Structure Explained
 
-### 1. `backend_api.py` 
+### 1. `backend_api.py`
 This is the Logic Layer. It has zero UI code.
 * **Database Interface:** Connects to PostGIS and runs the `SELECT ST_Value...` queries to extract raster data for a specific lat/lon.
 * **Data Cleaning:** Converts raw pixel values (Kelvin/Integers) into human-readable units (Celsius/mm).
 * **The Algorithm:** Contains `calculate_score_logic()`, which applies the FAO biological rules to the climate data. It decides if a plant "Survives" or "Thrives."
 
-### 2. `app-frontend.py` 
+### 2. `app-frontend.py`
 This is the Main Application entry point.
 * **Streamlit Layout:** Defines the columns, dropdowns, and page structure.
 * **State Management:** Remembers your selected location (`st.session_state`) so it doesn't reset when you change filters.
 * **Interactive Map:** Renders the Leaflet map using `folium` to let users pick coordinates.
 * **Orchestrator:** It calls the Backend to get data, then calls the Charts module to visualize it.
 
-### 3. `charts_frontend.py` 
+### 3. `charts_frontend.py`
 This module handles all Data Visualization using **Plotly**.
-* **`create_radar_chart`:** Draws the pink/blue shapes to compare Plant Needs vs. Location Climate.
 * **`create_circular_gauge`:** Renders the big ring showing the final 0-100 score.
+* **`create_radar_chart`:** Draws the pink/blue shapes to compare Plant Needs vs. Location Climate.
 * **`create_diverging_bar_chart`:** Calculates the +/- percentage deviations (e.g., "Too Cold by 10%").
 * **`create_top_countries_chart`:** Generates the global ranking list and highlights the user's selected country.
